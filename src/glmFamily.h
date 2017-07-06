@@ -33,6 +33,16 @@ namespace glm {
 	virtual void          setTheta(const double&);
     };
 
+    class multinomialDist : public glmDist {
+    public:
+      multinomialDist(Rcpp::List& ll) : glmDist(ll) {}
+      const ArrayXd variance(const ArrayXd&) const;
+      const ArrayXd devResid(const ArrayXd&, const ArrayXd&, const ArrayXd&) const;
+      double             aic(const ArrayXd&, const ArrayXd&, const ArrayXd&,
+                             const ArrayXd&, double) const;
+    };
+    
+    
     class binomialDist : public glmDist {
     public:
 	binomialDist(Rcpp::List& ll) : glmDist(ll) {}
