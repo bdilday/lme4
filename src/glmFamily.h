@@ -12,6 +12,8 @@
 
 namespace glm {
     using Eigen::ArrayXd;
+    using Eigen::ArrayXXd;
+
 
     class glmDist {
     protected:
@@ -26,13 +28,13 @@ namespace glm {
 	virtual const ArrayXd variance(const ArrayXd&) const;
 	virtual const ArrayXd devResid(const ArrayXd&, const ArrayXd&, const ArrayXd&) const;
 	virtual double             aic(const ArrayXd&, const ArrayXd&, const ArrayXd&,
-				       const ArrayXd&, double) const;
+                                const ArrayXd&, double) const;
 	/**< in keeping with the botched up nomenclature in the R glm function, 
 	 *   the value of aic is the deviance */
 	virtual double           theta() const;
 	virtual void          setTheta(const double&);
     };
-
+    
     class multinomialDist : public glmDist {
     public:
       multinomialDist(Rcpp::List& ll) : glmDist(ll) {}

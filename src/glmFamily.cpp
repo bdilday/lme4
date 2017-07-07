@@ -209,26 +209,44 @@ double multinomialDist::aic (const ArrayXd& y, const ArrayXd& n, const ArrayXd& 
     ans += (m[i] <= 0. ? 0. : wt[i]/m[i]) * ::Rf_dbinom(yy[i], m[i], mu[i], true);
   return (-2. * ans);
 }
-const ArrayXd multinomialDist::devResid(const ArrayXd& y, const ArrayXd& mu, const ArrayXd& wt) const {
-  int debug=1;
-  printf("hey, multinomilDist!");
+const ArrayXd multinomialDist::devResid(const ArrayXd& y, const ArrayXd& mu, 
+                                        const ArrayXd& wt) const {
+  ArrayXd ans = ArrayXd(y.size());
+  int debug=0;
+  Rcpp::Rcout << "hey, multinomilDist!" << std::endl;
   if (debug) {
-    for (int i=0; i < mu.size(); ++i) {
-      double r = 2. * wt[i] * (Y_log_Y(y[i], mu[i]) + Y_log_Y(1. - y[i], 1. - mu[i]));
+    for (int i=0; i < y.size(); ++i) {
+      double r = 2. * wt(i) * (Y_log_Y(y(i), mu(i)) + Y_log_Y(1. - y(i), 1. - mu(i)));
       if (r!=r) {  
         // attempt to detect `nan` (needs cross-platform testing, but should compile 
         // everywhere whether or not it actually works)
-        Rcpp::Rcout << "(bD) " << "nan @ pos " << i << ": y= " << y[i] 
-                    << "; mu=" << mu[i] 
-                    << "; wt=" << wt[i] 
-                    << "; 1-y=" << 1. - y[i] 
-                    << "; 1-mu=" << 1. - mu[i] 
-                    << "; ylogy=" << Y_log_Y(y[i], mu[i]) 
-                    << "; cylogy=" << Y_log_Y(1.-y[i], 1.-mu[i]) 
+        Rcpp::Rcout << "(mD) " << "nan @ pos " << i << ": y= " << y(i) 
+                    << "; mu=" << mu(i) 
+                    << "; wt=" << wt(i) 
+                    << "; 1-y=" << 1. - y(i) 
+                    << "; 1-mu=" << 1. - mu(i) 
+                    << "; ylogy=" << Y_log_Y(y(i), mu(i)) 
+                    << "; cylogy=" << Y_log_Y(1.-y(i), 1.-mu(i)) 
                     << std::endl;
       }
     }
   }
+  
+  double tmp, ydum;
+  for (int i=0; i < y.size(); ++i) {
+    if (y(i) == 1) {
+      ydum = 0;
+    } else {
+      ydum = 1; //y(i);
+    }
+
+    tmp = Y_log_Y(ydum, mu(i)) + Y_log_Y(1. - ydum, 1. - mu(i));
+    ans(i) = wt(i) * tmp;
+  }
+  
+ // return 2 * ans;
+  
+    // xxx bdilday
   return 2. * wt * (Y_log_Y(y, mu) + Y_log_Y(1. - y, 1. - mu));
 }
 const ArrayXd multinomialDist::variance(const ArrayXd& mu) const {return mu.unaryExpr(x1mx<double>());}
@@ -248,7 +266,7 @@ double binomialDist::aic (const ArrayXd& y, const ArrayXd& n, const ArrayXd& mu,
 }
 const ArrayXd binomialDist::devResid(const ArrayXd& y, const ArrayXd& mu, const ArrayXd& wt) const {
   int debug=1;
-  printf("hey, binmialDIst!");
+  Rcpp::Rcout << "hey, binmialDIst!" << std::endl;
   if (debug) {
     for (int i=0; i < mu.size(); ++i) {
       double r = 2. * wt[i] * (Y_log_Y(y[i], mu[i]) + Y_log_Y(1. - y[i], 1. - mu[i]));

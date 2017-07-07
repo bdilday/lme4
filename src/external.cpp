@@ -278,10 +278,10 @@ extern "C" {
     if (debug) {
       Rcpp::Rcout << "(igWI)" <<
         " delu_min: " << pp->delu().minCoeff() <<
-          "; delu_max: " << pp->delu().maxCoeff() <<
-            "; delb_min: " << pp->delb().minCoeff() <<
-              "; delb_max: " << pp->delb().maxCoeff() <<
-                std::endl; // if (verb) 
+        "; delu_max: " << pp->delu().maxCoeff() <<
+        "; delb_min: " << pp->delb().minCoeff() <<
+        "; delb_max: " << pp->delb().maxCoeff() <<
+        std::endl; // if (verb) 
     }
     rp->updateMu(pp->linPred(1.));
     if (debug) Rcpp::Rcout << "(igWI) mu: min: " << rp->mu().minCoeff() << 
@@ -304,7 +304,7 @@ extern "C" {
                           double tol, int maxit, int verbose) {
     double oldpdev=std::numeric_limits<double>::max();
     double pdev;
-    int maxstephalfit = 10;
+    int maxstephalfit = 100;
     bool   cvgd = false, verb = verbose > 2, moreverb = verbose > 10;
     int debug=1;
     
@@ -331,7 +331,18 @@ extern "C" {
           "; delb_max: " << pp->delb().maxCoeff() <<
             std::endl; // if (verb) 
       }
-      if (std::abs((oldpdev - pdev) / pdev) < tol) {cvgd = true; break;}
+      
+      if (std::abs((oldpdev - pdev) / pdev) < tol) {
+        cvgd = true; 
+        break;
+      } else {
+        Rcpp::Rcout << 
+          "after iteration abs diff is " << 
+            " pdev " << pdev <<
+            " oldpdev " << oldpdev <<  
+            " tol " << tol << " absdiff " <<
+            std::abs(oldpdev - pdev) / pdev << std::endl;
+      }
       
       // if (pdev != pdev) Rcpp::Rcout << "nan detected" << std::endl;
       // if (isnan(pdev)) Rcpp::Rcout << "nan detected" << std::endl;
@@ -345,7 +356,9 @@ extern "C" {
       if (isNAN(pdev) || (pdev > oldpdev)) { 
         // PWRSS step led to _larger_ deviation, or nan; try step halving
         if (verb) Rcpp::Rcout << 
-          "\npwrssUpdate: Entering step halving loop" 
+          "\npwrssUpdate: Entering step halving loop " <<
+            isNAN(pdev) << " pdev " << pdev <<  " old pdev " << oldpdev 
+                        << " diff " << pdev-oldpdev 
           << std::endl;
           for (int k = 0; k < maxstephalfit && 
           (isNAN(pdev) || (pdev > oldpdev)); k++) {
@@ -355,7 +368,7 @@ extern "C" {
             pdev = rp->resDev() + pp->sqrL(1.);
             if (moreverb) {
               Rcpp::Rcout << "step-halving iteration " <<
-                k << ":  pdev=" << pdev << 
+                k << ":  pdev=" << pdev << " diff= " << pdev-oldpdev <<
                   "; delu_min: " << pp->delu().minCoeff() <<
                   "; delu_max: " << pp->delu().maxCoeff() <<
                   "; delb_min: " << pp->delb().minCoeff() <<
@@ -1150,8 +1163,10 @@ void R_init_lme4(DllInfo *dll)
 }
 
 //SEXP multinomial_dev_resids(SEXP y, SEXP mu, SEXP wt)
-double multinomial_dev_resids(SEXP y, SEXP mu, SEXP wt)
-{
-  Rcpp::Rcout << "multinomial_dev_resids " << std::endl;
-  return(1.0);
-}
+
+// double multinomial_dev_resids(SEXP y, SEXP mu, SEXP wt)
+// {
+//   Rcpp::Rcout << "multinomial_dev_resids " << std::endl;
+//   //return(::Rf_ScalarReal(1.0));
+//   return(1.0);
+// }
