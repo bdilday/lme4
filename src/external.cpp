@@ -262,7 +262,7 @@ extern "C" {
   }
   
   static double internal_glmerWrkIter(merPredD *pp, glmResp *rp, bool uOnly) {
-    int debug=1; // !=0 to enable
+    int debug=0; // !=0 to enable
     if (debug) Rcpp::Rcout << "(igWI, pre-updateXwts) Xwts: min: " << 
       pp->Xwts().minCoeff() << 
         " sqrtWrkWt: min: " <<
@@ -278,10 +278,10 @@ extern "C" {
     if (debug) {
       Rcpp::Rcout << "(igWI)" <<
         " delu_min: " << pp->delu().minCoeff() <<
-          "; delu_max: " << pp->delu().maxCoeff() <<
-            "; delb_min: " << pp->delb().minCoeff() <<
-              "; delb_max: " << pp->delb().maxCoeff() <<
-                std::endl; // if (verb) 
+        "; delu_max: " << pp->delu().maxCoeff() <<
+        "; delb_min: " << pp->delb().minCoeff() <<
+        "; delb_max: " << pp->delb().maxCoeff() <<
+        std::endl; // if (verb) 
     }
     rp->updateMu(pp->linPred(1.));
     if (debug) Rcpp::Rcout << "(igWI) mu: min: " << rp->mu().minCoeff() << 
@@ -304,9 +304,9 @@ extern "C" {
                           double tol, int maxit, int verbose) {
     double oldpdev=std::numeric_limits<double>::max();
     double pdev;
-    int maxstephalfit = 10;
+    int maxstephalfit = 100;
     bool   cvgd = false, verb = verbose > 2, moreverb = verbose > 10;
-    int debug=1;
+    int debug=0;
     
     pdev = oldpdev; // define so debugging statements work on first step
     for (int i = 0; i < maxit; i++) {
@@ -321,7 +321,7 @@ extern "C" {
           Rcpp::Rcout << "before update:" << "pdev = " << pdev << std::endl; // if (verb) 
         }
       }
-      Vec   olddelu(pp->delu()), olddelb(pp->delb());
+      Vec olddelu(pp->delu()), olddelb(pp->delb());
       pdev = internal_glmerWrkIter(pp, rp, uOnly);
       if (verb) {
         Rcpp::Rcout << "pdev=" << pdev << 
@@ -331,7 +331,18 @@ extern "C" {
           "; delb_max: " << pp->delb().maxCoeff() <<
             std::endl; // if (verb) 
       }
-      if (std::abs((oldpdev - pdev) / pdev) < tol) {cvgd = true; break;}
+      
+      if (std::abs((oldpdev - pdev) / pdev) < tol) {
+        cvgd = true; 
+        break;
+      } else {
+        Rcpp::Rcout << 
+          "after iteration abs diff is " << 
+            " pdev " << pdev <<
+            " oldpdev " << oldpdev <<  
+            " tol " << tol << " absdiff " <<
+            std::abs(oldpdev - pdev) / pdev << std::endl;
+      }
       
       // if (pdev != pdev) Rcpp::Rcout << "nan detected" << std::endl;
       // if (isnan(pdev)) Rcpp::Rcout << "nan detected" << std::endl;
@@ -345,17 +356,24 @@ extern "C" {
       if (isNAN(pdev) || (pdev > oldpdev)) { 
         // PWRSS step led to _larger_ deviation, or nan; try step halving
         if (verb) Rcpp::Rcout << 
-          "\npwrssUpdate: Entering step halving loop" 
+          "\npwrssUpdate: Entering step halving loop " <<
+            isNAN(pdev) << " pdev " << pdev <<  " old pdev " << oldpdev 
+                        << " diff " << pdev-oldpdev 
           << std::endl;
           for (int k = 0; k < maxstephalfit && 
           (isNAN(pdev) || (pdev > oldpdev)); k++) {
             pp->setDelu((olddelu + pp->delu())/2.);
             if (!uOnly) pp->setDelb((olddelb + pp->delb())/2.);
-            rp->updateMu(pp->linPred(1.));
-            pdev = rp->resDev() + pp->sqrL(1.);
+            
+            // xxx bdilday
+            //rp->updateMu(pp->linPred(1.));
+            //pdev = rp->resDev() + pp->sqrL(1.);
+            oldpdev = pdev;
+            pdev = internal_glmerWrkIter(pp, rp, uOnly);
+            
             if (moreverb) {
               Rcpp::Rcout << "step-halving iteration " <<
-                k << ":  pdev=" << pdev << 
+                k << ":  pdev=" << pdev << " diff= " << pdev-oldpdev <<
                   "; delu_min: " << pp->delu().minCoeff() <<
                   "; delu_max: " << pp->delu().maxCoeff() <<
                   "; delb_min: " << pp->delb().minCoeff() <<
@@ -1150,8 +1168,10 @@ void R_init_lme4(DllInfo *dll)
 }
 
 //SEXP multinomial_dev_resids(SEXP y, SEXP mu, SEXP wt)
-double multinomial_dev_resids(SEXP y, SEXP mu, SEXP wt)
-{
-  Rcpp::Rcout << "multinomial_dev_resids " << std::endl;
-  return(1.0);
-}
+
+// double multinomial_dev_resids(SEXP y, SEXP mu, SEXP wt)
+// {
+//   Rcpp::Rcout << "multinomial_dev_resids " << std::endl;
+//   //return(::Rf_ScalarReal(1.0));
+//   return(1.0);
+// }

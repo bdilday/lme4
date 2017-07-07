@@ -48,7 +48,11 @@ multinomial <- function (link = "logit") {
   validmu <- function(mu) all(is.finite(mu)) && all(mu > 0 & mu < 1)
 #  dev.resids <- function(y, mu, wt) .Call(stats:::C_binomial_dev_resids, y, mu, wt)
   
-  dev.resids <- function(y, mu, wt) .Call(multinomial_dev_resids, y, mu, wt)
+  dev.resids <- function(y, mu, wt) {
+    .Call(multinomial_dev_resids, y, mu, wt)
+    #1
+   # .Call(stats:::C_binomial_dev_resids, y, mu, wt)
+  }
   
   aic <- function(y, n, mu, wt, dev) {
     m <- if (any(n > 1)) 
