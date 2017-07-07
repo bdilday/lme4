@@ -211,131 +211,18 @@ double nlsResp::updateMu(const VectorXd& gamma) {
   const VectorXd lp(d_gamma + d_offset); // linear predictor
   const double  *gg = lp.data();
   
-    double lmerResp::Laplace(double ldL2, double ldRX2, double sqrL, double sigma_sq) const {
-      double df = d_y.size() - d_reml;
-      
-      double result = df * (2.0 * M_LN_SQRT_2PI + std::log(sigma_sq)); // (2pi sigma_sq)^-df/2
-      result += (d_wrss + sqrL) / sigma_sq; // exp(-1/2sigma_sq x |pwrss|)
-      result += ldL2 + (d_reml > 0 ? ldRX2 : 0.0); // det|LL'|^-1/2 and similar REML penalty
-      result += -d_ldW; // subtract prior weights factor
-      return result;
-    }
-
-    void lmerResp::setReml(int rr) {
-      if (rr < 0) throw invalid_argument("setReml: negative value for REML not meaningful");
-      d_reml = rr;
-    }
-    
-    glmResp::glmResp(List fam, SEXP y, SEXP weights, SEXP offset,
-                     SEXP mu, SEXP sqrtXwt, SEXP sqrtrwt, SEXP wtres, SEXP eta, SEXP n)
-      : lmResp(y, weights, offset, mu, sqrtXwt, sqrtrwt, wtres),
-        d_fam(fam),
-        d_eta(as<MVec>(eta)),
-        d_n(as<MVec>(n)) {
-    }
-    
-    double  glmResp::aic() const {
-      return d_fam.aic(d_y, d_n, d_mu, d_weights, resDev());
-    }
-    
-    ArrayXd glmResp::devResid() const {
-      return d_fam.devResid(d_y, d_mu, d_weights);
-    }
-    
-    ArrayXd glmResp::muEta() const {
-      return d_fam.muEta(d_eta);
-    }
-    
-    ArrayXd glmResp::variance() const {
-      return d_fam.variance(d_mu);
-    }
-    
-    ArrayXd glmResp::wrkResids() const {
-      return (d_y - d_mu).array() / muEta();
-    }
-    
-    ArrayXd glmResp::wrkResp() const {
-      return (d_eta - d_offset).array() + wrkResids();
-    }
-    
-    ArrayXd glmResp::wtWrkResp() const {
-      return wrkResp() * sqrtWrkWt();
-    }
-    
-    ArrayXd glmResp::sqrtWrkWt() const {
-      int debug=0;
-      if (debug) Rcpp::Rcout << "(sqrtWrkWt) min muEta: " <<
-        muEta().minCoeff() <<
-          " min weights: " << d_weights.array().minCoeff() <<
-            std::endl;
-      return muEta() * (d_weights.array() / variance()).sqrt();
-    }
-    
-    double glmResp::Laplace(double ldL2, double ldRX2, double sqrL) const {
-      return ldL2 + sqrL + aic();
-    }
-    
-    double glmResp::resDev() const {
-      return devResid().sum();
-    }
-    
-    double glmResp::updateMu(const VectorXd& gamma) {
-      int debug=1;
-      d_eta = d_offset + gamma; // lengths are checked here
-      d_mu  = d_fam.linkInv(d_eta);
-      if (debug) Rcpp::Rcout << "updateMu: min mu:" << 
-        d_mu.minCoeff() << " max mu: " << 
-          d_mu.maxCoeff() << std::endl;
-      return updateWrss();
-    }
-    
-    double glmResp::updateWts() {
-      d_sqrtrwt = (d_weights.array() / variance()).sqrt();
-      d_sqrtXwt = muEta() * d_sqrtrwt.array();
-      return updateWrss();
-    }
-    
-    void glmResp::setN(const VectorXd& n) {
-      if (n.size() != d_n.size())
-        throw invalid_argument("n size mismatch");
-      d_n = n;
-    }
-    
-    nlsResp::nlsResp(SEXP y, SEXP weights, SEXP offset, SEXP mu, SEXP sqrtXwt,
-                     SEXP sqrtrwt, SEXP wtres, SEXP gamma, SEXP mm, SEXP ee,
-                     SEXP pp)
-      : lmResp(y, weights, offset, mu, sqrtXwt, sqrtrwt, wtres),
-        d_gamma(as<MVec>(gamma)),
-        d_nlenv(as<Environment>(ee)),
-        d_nlmod(as<Language>(mm)),
-        d_pnames(as<CharacterVector>(pp)) {
-    }
-    
-    double nlsResp::Laplace(double ldL2, double ldRX2, double sqrL) const {
-	double lnum = 2.* PI * (d_wrss + sqrL), n = d_y.size();
-	return ldL2 + n * (1 + std::log(lnum / n));
-    }
-
-    double nlsResp::updateMu(const VectorXd& gamma) {
-	int             n = d_y.size();
-	if (gamma.size() != d_gamma.size())
-	    throw invalid_argument("size mismatch in updateMu");
-	std::copy(gamma.data(), gamma.data() + gamma.size(), d_gamma.data());
-	const VectorXd lp(d_gamma + d_offset); // linear predictor
-	const double  *gg = lp.data();
-
-	for (int p = 0; p < d_pnames.size(); ++p) {
-	    std::string pn(d_pnames[p]);
-	    NumericVector pp = d_nlenv.get(pn);
-	    std::copy(gg + n * p, gg + n * (p + 1), pp.begin());
-	}
-	NumericVector  rr = d_nlmod.eval(SEXP(d_nlenv));
-	if (rr.size() != n)
-	    throw invalid_argument("dimension mismatch");
-	std::copy(rr.begin(), rr.end(), d_mu.data());
-	NumericMatrix  gr = rr.attr("gradient");
-	std::copy(gr.begin(), gr.end(), d_sqrtXwt.data());
-	return updateWrss();
-    }
+  for (int p = 0; p < d_pnames.size(); ++p) {
+    std::string pn(d_pnames[p]);
+    NumericVector pp = d_nlenv.get(pn);
+    std::copy(gg + n * p, gg + n * (p + 1), pp.begin());
+  }
+  NumericVector  rr = d_nlmod.eval(SEXP(d_nlenv));
+  if (rr.size() != n)
+    throw invalid_argument("dimension mismatch");
+  std::copy(rr.begin(), rr.end(), d_mu.data());
+  NumericMatrix  gr = rr.attr("gradient");
+  std::copy(gr.begin(), gr.end(), d_sqrtXwt.data());
+  return updateWrss();
+}
 
 }
