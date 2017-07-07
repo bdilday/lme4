@@ -262,7 +262,7 @@ extern "C" {
   }
   
   static double internal_glmerWrkIter(merPredD *pp, glmResp *rp, bool uOnly) {
-    int debug=1; // !=0 to enable
+    int debug=0; // !=0 to enable
     if (debug) Rcpp::Rcout << "(igWI, pre-updateXwts) Xwts: min: " << 
       pp->Xwts().minCoeff() << 
         " sqrtWrkWt: min: " <<
@@ -306,7 +306,7 @@ extern "C" {
     double pdev;
     int maxstephalfit = 100;
     bool   cvgd = false, verb = verbose > 2, moreverb = verbose > 10;
-    int debug=1;
+    int debug=0;
     
     pdev = oldpdev; // define so debugging statements work on first step
     for (int i = 0; i < maxit; i++) {
@@ -321,7 +321,7 @@ extern "C" {
           Rcpp::Rcout << "before update:" << "pdev = " << pdev << std::endl; // if (verb) 
         }
       }
-      Vec   olddelu(pp->delu()), olddelb(pp->delb());
+      Vec olddelu(pp->delu()), olddelb(pp->delb());
       pdev = internal_glmerWrkIter(pp, rp, uOnly);
       if (verb) {
         Rcpp::Rcout << "pdev=" << pdev << 
@@ -364,8 +364,13 @@ extern "C" {
           (isNAN(pdev) || (pdev > oldpdev)); k++) {
             pp->setDelu((olddelu + pp->delu())/2.);
             if (!uOnly) pp->setDelb((olddelb + pp->delb())/2.);
-            rp->updateMu(pp->linPred(1.));
-            pdev = rp->resDev() + pp->sqrL(1.);
+            
+            // xxx bdilday
+            //rp->updateMu(pp->linPred(1.));
+            //pdev = rp->resDev() + pp->sqrL(1.);
+            oldpdev = pdev;
+            pdev = internal_glmerWrkIter(pp, rp, uOnly);
+            
             if (moreverb) {
               Rcpp::Rcout << "step-halving iteration " <<
                 k << ":  pdev=" << pdev << " diff= " << pdev-oldpdev <<

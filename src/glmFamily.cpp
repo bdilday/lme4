@@ -213,7 +213,6 @@ const ArrayXd multinomialDist::devResid(const ArrayXd& y, const ArrayXd& mu,
                                         const ArrayXd& wt) const {
   ArrayXd ans = ArrayXd(y.size());
   int debug=0;
-  Rcpp::Rcout << "hey, multinomilDist!" << std::endl;
   if (debug) {
     for (int i=0; i < y.size(); ++i) {
       double r = 2. * wt(i) * (Y_log_Y(y(i), mu(i)) + Y_log_Y(1. - y(i), 1. - mu(i)));
@@ -242,12 +241,20 @@ const ArrayXd multinomialDist::devResid(const ArrayXd& y, const ArrayXd& mu,
 
     tmp = Y_log_Y(ydum, mu(i)) + Y_log_Y(1. - ydum, 1. - mu(i));
     ans(i) = wt(i) * tmp;
+
+    Rcpp::Rcout << "i= " << i <<
+      " y= " << y(i) <<
+      " ydum= " << ydum <<
+      " mu= " << mu(i) <<
+      " tmp= " << tmp <<
+      " ans " << ans(i) << std::endl;
   }
   
- // return 2 * ans;
+
+  return 2 * ans;
   
     // xxx bdilday
-  return 2. * wt * (Y_log_Y(y, mu) + Y_log_Y(1. - y, 1. - mu));
+ // return 2. * wt * (Y_log_Y(y, mu) + Y_log_Y(1. - y, 1. - mu));
 }
 const ArrayXd multinomialDist::variance(const ArrayXd& mu) const {return mu.unaryExpr(x1mx<double>());}
 //@}
@@ -266,7 +273,7 @@ double binomialDist::aic (const ArrayXd& y, const ArrayXd& n, const ArrayXd& mu,
 }
 const ArrayXd binomialDist::devResid(const ArrayXd& y, const ArrayXd& mu, const ArrayXd& wt) const {
   int debug=1;
-  Rcpp::Rcout << "hey, binmialDIst!" << std::endl;
+//  Rcpp::Rcout << "hey, binmialDIst!" << std::endl;
   if (debug) {
     for (int i=0; i < mu.size(); ++i) {
       double r = 2. * wt[i] * (Y_log_Y(y[i], mu[i]) + Y_log_Y(1. - y[i], 1. - mu[i]));
