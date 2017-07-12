@@ -194,6 +194,120 @@ extern "C" {
     END_RCPP;
   }
   
+  // generalized linear model (and generalized linear mixed model) response
+  
+  SEXP glm_vec_Create(SEXP fam, SEXP y, SEXP weights, SEXP offset, SEXP mu,
+                  SEXP sqrtXwt, SEXP sqrtrwt, SEXP wtres, SEXP eta, SEXP n) {
+    BEGIN_RCPP;
+    glmResp *ans = new glmResp(List(fam), y, weights, offset, mu,
+                               sqrtXwt, sqrtrwt, wtres, eta, n);
+    return wrap(XPtr<glmResp>(ans, true));
+    END_RCPP;
+  }
+  
+  SEXP glm_vec_aic(SEXP ptr_) {
+    BEGIN_RCPP;
+    return ::Rf_ScalarReal(XPtr<glmResp>(ptr_)->aic());
+    END_RCPP;
+  }
+  
+  SEXP glm_vec_setN(SEXP ptr_, SEXP n) {
+    BEGIN_RCPP;
+    XPtr<glmResp>(ptr_)->setN(as<MVec>(n));
+    END_RCPP;
+  }
+  
+  SEXP glm_vec_devResid(SEXP ptr_) {
+    BEGIN_RCPP;
+    return wrap(XPtr<glmResp>(ptr_)->devResid());
+    END_RCPP;
+  }
+  
+  SEXP glm_vec_family(SEXP ptr_) {
+    BEGIN_RCPP;
+    return wrap(XPtr<glmResp>(ptr_)->family());
+    END_RCPP;
+  }
+  
+  SEXP glm_vec_link(SEXP ptr_) {
+    BEGIN_RCPP;
+    return wrap(XPtr<glmResp>(ptr_)->link());
+    END_RCPP;
+  }
+  
+  SEXP glm_vec_muEta(SEXP ptr_) {
+    BEGIN_RCPP;
+    return wrap(XPtr<glmResp>(ptr_)->muEta());
+    END_RCPP;
+  }
+  
+  SEXP glm_vec_resDev(SEXP ptr_) {
+    BEGIN_RCPP;
+    return ::Rf_ScalarReal(XPtr<glmResp>(ptr_)->resDev());
+    END_RCPP;
+  }
+  
+  SEXP glm_vec_setTheta(SEXP ptr, SEXP newtheta) {
+    BEGIN_RCPP;
+    XPtr<glmResp>(ptr)->setTheta(::Rf_asReal(newtheta));
+    END_RCPP;
+  }
+  
+  SEXP glm_vec_sqrtWrkWt(SEXP ptr_) {
+    BEGIN_RCPP;
+    return wrap(XPtr<glmResp>(ptr_)->sqrtWrkWt());
+    END_RCPP;
+  }
+  
+  SEXP glm_vec_theta(SEXP ptr) {
+    BEGIN_RCPP;
+    return ::Rf_ScalarReal(XPtr<glmResp>(ptr)->theta());
+    END_RCPP;
+  }
+  
+  SEXP glm_vec_updateWts(SEXP ptr_) {
+    BEGIN_RCPP;
+    return ::Rf_ScalarReal(XPtr<glmResp>(ptr_)->updateWts());
+    END_RCPP;
+  }
+  
+  SEXP glm_vec_variance(SEXP ptr_) {
+    BEGIN_RCPP;
+    return wrap(XPtr<glmResp>(ptr_)->variance());
+    END_RCPP;
+  }
+  
+  SEXP glm_vec_wrkResids(SEXP ptr_) {
+    BEGIN_RCPP;
+    return wrap(XPtr<glmResp>(ptr_)->wrkResids());
+    END_RCPP;
+  }
+  
+  SEXP glm_vec_wrkResp(SEXP ptr_) {
+    BEGIN_RCPP;
+    return wrap(XPtr<glmResp>(ptr_)->wrkResp());
+    END_RCPP;
+  }
+  
+  SEXP glm_vec_wtWrkResp(SEXP ptr_) {
+    BEGIN_RCPP;
+    return wrap(XPtr<glmResp>(ptr_)->wtWrkResp());
+    END_RCPP;
+  }
+  
+  SEXP glm_vec_Laplace(SEXP ptr_, SEXP ldL2, SEXP ldRX2, SEXP sqrL) {
+    BEGIN_RCPP;
+    return ::Rf_ScalarReal(XPtr<glmResp>(ptr_)->Laplace(::Rf_asReal(ldL2),
+                                         ::Rf_asReal(ldRX2),
+                                         ::Rf_asReal(sqrL)));
+    END_RCPP;
+  }
+  
+  SEXP glm_vec_updateMu(SEXP ptr_, SEXP gamma) {
+    BEGIN_RCPP;
+    return ::Rf_ScalarReal(XPtr<glmResp>(ptr_)->updateMu(as<MVec>(gamma)));
+    END_RCPP;
+  }
   // glm family objects
   
   SEXP glmFamily_Create(SEXP fam_) {

@@ -243,15 +243,16 @@ const ArrayXd multinomialDist::devResid(const ArrayXd& y, const ArrayXd& mu,
     tmp = Y_log_Y(ydum, mu(i)) + Y_log_Y(1. - ydum, 1. - mu(i));
     ans(i) = wt(i) * tmp;
 
-    Rcpp::Rcout << "i= " << i <<
-      " y= " << y(i) <<
-      " ydum= " << ydum <<
-      " mu= " << mu(i) <<
-      " tmp= " << tmp <<
-      " ans " << ans(i) << std::endl;
+    if (i == 0) {
+      Rcpp::Rcout << "i= " << i <<
+        " y= " << y(i) <<
+        " ydum= " << ydum <<
+        " mu= " << mu(i) <<
+        " tmp= " << tmp <<
+        " ans " << ans(i) << std::endl;
+    }
   }
   
-
   return 2 * ans;
   
     // xxx bdilday

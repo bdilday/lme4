@@ -54,7 +54,12 @@ double lmResp::updateMu(const VectorXd& gamma) {
  * @return Updated weighted residual sum of squares
  */
 double lmResp::updateWrss() {
-  d_wtres = d_sqrtrwt.cwiseProduct(d_y - d_mu);
+  // xxx bdilday hack hack hack
+//  d_wtres = d_sqrtrwt.cwiseProduct(d_y - d_mu);
+//VectorXd a(d_y.size());
+  for (int i=0; i<d_wtres.size(); i++) {
+    d_wtres(i) = 1.0;
+  }
   d_wrss  = d_wtres.squaredNorm();
   return d_wrss;
 }
@@ -170,9 +175,19 @@ double glmResp::updateMu(const VectorXd& gamma) {
   int debug=1;
   d_eta = d_offset + gamma; // lengths are checked here
   d_mu  = d_fam.linkInv(d_eta);
-  if (debug) Rcpp::Rcout << "updateMu: min mu:" << 
-    d_mu.minCoeff() << " max mu: " << 
-      d_mu.maxCoeff() << std::endl;
+  if (debug) {
+    for (int i=0; i<d_eta.size(); i++) {
+      Rcpp::Rcout << "updateMu: " << i << 
+        " d_offset: " << d_offset(i) << 
+        " gamma: " << gamma(i) << 
+        " d_eta: " << d_eta(i) << 
+        " d_mu " << d_mu(i) << 
+          std::endl;
+    }
+    Rcpp::Rcout << "updateMu: min mu:" << 
+      d_mu.minCoeff() << " max mu: " << 
+        d_mu.maxCoeff() << std::endl; 
+  }
   return updateWrss();
 }
 

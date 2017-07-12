@@ -463,6 +463,104 @@ glmResp <-
 
 glmResp$lock("family", "n", "eta")
 
+##' @export
+glmRespVec <-
+  setRefClass("glmRespVec", contains = "lmResp",
+              fields = list(eta = "numeric", family = "family", n = "numeric"),
+              methods=
+                list(initialize = function(...) {
+                  callSuper(...)
+                  ll <- list(...)
+                  if (is.null(ll$family)) stop("family must be specified")
+                  family <<- ll$family
+                  n <<- if (!is.null(ll$n)) as.numeric(ll$n) else rep.int(1,length(y))
+                  eta <<- if (!is.null(ll$eta)) as.numeric(ll$eta) else numeric(length(y))
+                },
+                aic          = function() {
+                  .Call(glm_vec_aic, ptr())
+                },
+                allInfo = function() {
+                  'return all the information available on the object'
+                  cbind(callSuper(),
+                        data.frame(eta=eta, muEta=muEta(), var=variance(),
+                                   WrkWt=sqrtWrkWt(), wrkRes=wrkResids(),
+                                   wrkResp=wrkResp(), devRes=devResid()))
+                },
+                devResid  = function() {
+                  'returns the vector of deviance residuals'
+                  .Call(glm_vec_devResid, ptr())
+                },
+                fam       = function() {
+                  'returns the name of the glm family'
+                  .Call(glm_vec_family, ptr())
+                },
+                Laplace   = function(ldL2, ldRX2, sqrL) {
+                  'returns the Laplace approximation to the profiled deviance'
+                  .Call(glm_Laplace, ptr(), ldL2, ldRX2, sqrL)
+                },
+                link      = function() {
+                  'returns the name of the glm link'
+                  .Call(glm_vec_link, ptr())
+                },
+                muEta     = function() {
+                  'returns the diagonal of the Jacobian matrix, d mu/d eta'
+                  .Call(glm_vec_muEta, ptr())
+                },
+                ptr       = function() {
+                  'returns the external pointer, regenerating if necessary'
+                  if (length(y)) {
+                    if (.Call(isNullExtPtr, Ptr)) {
+                      Ptr <<- .Call(glm_vec_Create, family, y, weights, offset, mu, sqrtXwt,
+                                    sqrtrwt, wtres, eta, n)
+                      .Call(glm_updateMu, Ptr, eta - offset)
+                    }
+                  }
+                  Ptr
+                },
+                resDev = function() {
+                  'returns the sum of the deviance residuals'
+                  .Call(glm_vec_resDev, ptr())
+                },
+                setTheta = function(theta) {
+                  'sets a new value of theta, for negative binomial distribution only'
+                  .Call(glm_vec_setTheta, ptr(), as.numeric(theta))
+                },
+                sqrtWrkWt = function() {
+                  'returns the square root of the working X weights'
+                  .Call(glm_vec_sqrtWrkWt, ptr())
+                },
+                theta = function() {
+                  'query the value of theta, for negative binomial distribution only'
+                  .Call(glm_vec_theta, ptr())
+                },
+                updateMu = function(gamma) {
+                  'update mu, residuals, weights, etc. from the linear predictor'
+                  .Call(glm_vec_updateMu, ptr(), as.numeric(gamma))
+                },
+                updateWts = function() {
+                  'update the residual and X weights from the current value of eta'
+                  .Call(glm_vec_updateWts, ptr())
+                },
+                variance = function() {
+                  'returns the vector of variances'
+                  .Call(glm_vec_variance, ptr())
+                },
+                wtWrkResp = function() {
+                  'returns the vector of weighted working responses'
+                  .Call(glm_vec_wtWrkResp, ptr())
+                },
+                wrkResids = function() {
+                  'returns the vector of working residuals'
+                  .Call(glm_vec_wrkResids, ptr())
+                },
+                wrkResp = function() {
+                  'returns the vector of working responses'
+                  .Call(glm_vec_wrkResp, ptr())
+                }
+                )
+  )
+
+glmResp$lock("family", "n", "eta")
 
 ##' @export
 nlsResp <-
