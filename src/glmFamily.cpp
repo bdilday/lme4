@@ -213,7 +213,6 @@ const ArrayXd multinomialDist::devResid(const ArrayXd& y, const ArrayXd& mu,
                                         const ArrayXd& wt) const {
   ArrayXd ans = ArrayXd(y.size());
   int debug=0;
-  //Rcpp::Rcout << "hey, multinomilDist!" << std::endl;
   if (debug) {
     for (int i=0; i < y.size(); ++i) {
       double r = 2. * wt(i) * (Y_log_Y(y(i), mu(i)) + Y_log_Y(1. - y(i), 1. - mu(i)));
