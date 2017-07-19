@@ -243,3 +243,9 @@ S3method(summary,lmList4)
 ## Auxiliaries:
 S3method(getGroups,lmList4)
 
+## multinomial dev
+export(simulate_data_as_matrix_resp)
+export(multinomial)
+export(glmer_vec)
+export(mkRespVecMod)
+export(step_through_multinomial)

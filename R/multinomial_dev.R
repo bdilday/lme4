@@ -64,123 +64,11 @@ simulate_data_as_matrix_resp <- function(rseed=101, n_matchup=10) {
   df1
 }
 
-make_multinomial_df <- function(df1) {
-  column_names <- df1 %>% 
-    subset(select = !grepl('outcome', names(df1))) %>% names()
-  all_outcomes <- unique(df1$outcome)
-  tmp <- data_frame(outcome=df1$outcome)
-  nl <- length(all_outcomes) - 1
-  for (k in 1:nl) {
-    for (column_name in column_names) {
-      new_column_name <- paste(column_name, k, sep='.')
-      tmp[[new_column_name]] <- as.factor(df1[[column_name]])
-    }
-  }
-  
-  tmp
-}
-
-#' @export 
-step_through_binomial <- function(nlim=1000) {
-
-}
-
 #' @export
 test_multinomial_data <- function(nlim=NULL) {
   BProDRA::generate_model_df(nlim=nlim, year=2016)  
 }
 
-#' @export
-test_multinomial_data_X <- function(nlim=NULL) {
-  column_names <- c("BAT_ID", "PIT_ID", "HOME_TEAM_ID", "bid", "pid", "sid")
-  model_df <- BProDRA::generate_model_df(nlim=nlim, year=2016)
-  all_outcomes <- unique(model_df$ev$outcome) %>% sort()
-  ref_outcome <- all_outcomes[[1]] 
-  nl <- length(all_outcomes)
-  ev <- list()
-  
-  for (k in 2:nl) {
-    cc <- which(model_df$ev$outcome == all_outcomes[[k]])
-    tmp <- model_df$ev[cc,]
-    for (column_name in column_names) {
-      tmp[[column_name]] <- paste(tmp[[column_name]], k, sep='_')
-      tmp$outcome <- 1
-    }
-    ev[[k]] <- tmp
-    
-    cc <- which(model_df$ev$outcome == all_outcomes[[1]])
-    tmp <- model_df$ev[cc,]
-    for (column_name in column_names) {
-      tmp[[column_name]] <- paste(tmp[[column_name]], k, sep='_')
-      tmp$outcome <- 0
-    }
-    ev[[100 + k]] <- tmp
-  }
-
-  tmp <- purrr::reduce(ev, rbind.data.frame)
-  model_df$ev <- tmp
-  rm(tmp)
-  model_df
-}
-
-#' @export
-do_multinomial_as_retrms <- function(nlim=NULL) {
-#  column_names <- c("BAT_ID", "PIT_ID", "HOME_TEAM_ID")
-  column_names <- c("BAT_ID")
-  model_df <- BProDRA::generate_model_df(nlim=nlim, year=2016)
-  all_outcomes <- unique(model_df$ev$outcome) %>% sort()
-  nl <- length(all_outcomes)
-  ev <- list()
-  
-  tmp <- model_df$ev  
-  for (k in 1:nl) {
-    for (column_name in column_names) {
-      new_column_name <- paste(column_name, k, sep='.')
-      tmp[[new_column_name]] <- as.factor(tmp[[column_name]])
-    }
-  }
-  
-  tmp %<>% mutate(idcase=row_number())  
-  glf <- lme4::glFormula(
-    outcome ~ (1|BAT_ID.1) + 
-      (1|BAT_ID.2) + 
-      (1|BAT_ID.3) + 
-      (1|BAT_ID.4), 
-    data=tmp, family=binomial, nAGQ=0
-    )
- 
-   ref_index <- last(all_outcomes)
-   cc = which(tmp$outcome == ref_index)
-   tmp[cc,]$outcome <- 0
-   
-   for (idx in 1:(ref_index-1)) {
-     cc <- which(tmp$outcome == idx)
-     
-   }
-   
-}
-
-#' @export
-test_multinomial_data_mlogit <- function(nlim=NULL) {
-  column_names <- c("BAT_ID", "PIT_ID", "HOME_TEAM_ID")
-  model_df <- BProDRA::generate_model_df(nlim=nlim, year=2016)
-  all_outcomes <- unique(model_df$ev$outcome) %>% sort()
-  nl <- length(all_outcomes)
-  ev <- list()
-
-  tmp <- model_df$ev  
-  for (k in 1:nl) {
-    for (column_name in column_names) {
-      new_column_name <- paste(column_name, k, sep='.')
-      tmp[[new_column_name]] <- as.factor(tmp[[column_name]])
-    }
-  }
-
-  tmp %<>% mutate(idcase=row_number())
-  model_df$ev <- tmp
-  rm(tmp)
-  model_df
-}
 
 #' @export
 test_binomial_data <- function(nlim=NULL) {
@@ -191,14 +79,6 @@ test_binomial_data <- function(nlim=NULL) {
   
 }
 
-#' @export
-test_nomial_model <- function(model_df, family_name='binomial', ...) {
-  mod1 <- lme4::glmer(outcome ~ (1|bid) + (1|pid) + (1|sid), 
-                      data=model_df$ev, 
-                      nAGQ = 0, 
-                      family=family_name, 
-                      control=lme4::glmerControl(optimizer = "nloptwrap"), ...)
-}
 
 #' @export
 multinomial <- function (link = "multiclasslogit") {
