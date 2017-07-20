@@ -19,14 +19,17 @@ simulate_data <- function(rseed=101, n_matchup=10) {
   }
   list_of_factors <- names(sim_coefs)
   factor1 <- rep(list_of_factors, each=n_matchup * length(list_of_factors))
-  factor2 <- rep(lapply(list_of_factors, rep, n_matchup), length(list_of_factors)) %>% unlist()
+  factor2 <-  unlist(rep(lapply(list_of_factors, rep, n_matchup), length(list_of_factors)))
 
-  df1 <- data_frame(fB=factor1, fP=factor2)
+  df1 <- data.frame(fB=factor1, fP=factor2)
   results_vector <- sapply(1:nrow(df1), function(idx) {
     r <- df1[idx,]
     sim_entry(r$fB, r$fP)
   })
   df1$outcome <- results_vector
+  k_class <- max(results_vector)
+  cc <- which(df1$outcome == k_class)
+  df1[cc,]$outcome <- 0
   df1
 }
 
@@ -50,9 +53,9 @@ simulate_data_as_matrix_resp <- function(rseed=101, n_matchup=10) {
   }
   list_of_factors <- names(sim_coefs)
   factor1 <- rep(list_of_factors, each=n_matchup * length(list_of_factors))
-  factor2 <- rep(lapply(list_of_factors, rep, n_matchup), length(list_of_factors)) %>% unlist()
+  factor2 <- unlist(rep(lapply(list_of_factors, rep, n_matchup), length(list_of_factors)))
   
-  df1 <- data_frame(fB=factor1, fP=factor2)
+  df1 <- data.frame(fB=factor1, fP=factor2)
   results_vector <- sapply(1:nrow(df1), function(idx) {
     r <- df1[idx,]
     sim_entry(r$fB, r$fP)
@@ -79,6 +82,29 @@ test_binomial_data <- function(nlim=NULL) {
   
 }
 
+#' @export
+glVecFormula <- function(formula, data=NULL, family = gaussian, ...) {
+  y_var <- frm[[2]]
+  new_frm_char <- as.character(y_var) 
+  k_class <- max(df1[,as.character(yv)])
+  glf <- glFormula(formula, data, family, ...)
+  fixed_ef <- glf$X
+  random_effects <- names(glf$reTrms$cnms)
+  
+  new_rhs <- ""
+  for (random_effect_name in random_effects) {
+    for (k in 1:k_class) {
+      new_var <- sprintf("%s.%d", random_effect_name, k)
+      new_rhs <- sprintf(" %s (1|%s) + ", new_rhs, new_var)
+      data[,new_var] <- data[,random_effect_name]
+    }
+    data[,random_effect_name] <- NULL
+  }
+  
+  new_frm <- as.formula(sprintf(" %s ~ %s 1", new_frm_char, new_rhs))
+  glf <- glFormula(new_frm, data, family, ...)
+  glf
+}
 
 #' @export
 multinomial <- function (link = "multiclasslogit") {
@@ -110,11 +136,11 @@ multinomial <- function (link = "multiclasslogit") {
   }
  
   initialize <- expression({
-    if (NCOL(y) == 1) {
-      stop("for the 'multinomial' family, y must be an N x K matrix of 0's and 1's")
+    if (NCOL(y) != 1) {
+      stop("for the 'multinomial' family, y must be an N x 1 matrix of integers, ranging from 0 to k-1")
     } else { 
       if (any(abs(y - round(y)) > 0.001)) warning("non-integer counts in a multinomial glm!")
-      mustart <- matrix(1/(1+NCOL(y)), nrow=dim(y)[1], ncol=dim(y)[2])
+      mustart <- matrix(1/(1+max(y)), nrow=length(y), ncol=max(y))
     }
     })
 
@@ -194,6 +220,20 @@ multinomial <- function (link = "multiclasslogit") {
   #           class = "family")
 }
 
+
+is_multiclass_family <- function(family) {
+  if (class(family) == "family") {
+    family_char <- family$family
+  } else if (class(family) == "character") {
+    family_char <- family
+  } else if (is.null(family)) {
+    family_char = ""  
+  } else {
+    stop("family is neither family class nor character class")
+  }
+  
+  family_char %in% c("multinomial")
+}
 
 #' @export
 ##' Fit a generalized linear mixed model (GLMM)
@@ -465,26 +505,34 @@ fix_multinomial_environment <- function(rho) {
 }
 
 #' @export 
-step_through_multinomial <- function(df1=NULL, n_matchup=10, verbose=0) {
+step_through_binomial <- function(df1=NULL, n_matchup=10, verbose=0) {
   if (is.null(df1)) {
-    df1 <- simulate_data_as_matrix_resp(n_matchup = 10)    
+    df1 <- simulate_data_as_matrix_resp(n_matchup = 10)
+  }
+  
+  if (class(df1$outcome) == 'matrix') {
+    df1$outcome <- df1$outcome[,1]
   }
   
   mc <- mcout <- match.call()
   control <- lme4::glmerControl(optimizer = "nloptwrap")
   nAGQinit <- 0
+  nAGQ <- 0
   
-  glf <- lme4::glVecFormula(outcome ~ (1|fB) + (1|fP), 
-                            data=df1, nAGQ = 0, 
-                            family = multinomial, 
-                            control=control, verbose=1000)
+  glf <- lme4::glFormula(outcome ~ (1|fB) + (1|fP), 
+                         data=df1, nAGQ = 0, 
+                         family = binomial, 
+                         control=control, verbose=1000)
   
   mcout$formula <- glf$formula
   glf$formula <-  NULL # ??
   
-  devfun <- do.call(mkGlmerVecDevfun, c(glf, list(verbose = verbose,
-                                                  control = control,
-                                                  nAGQ = nAGQinit)))
+  devfun <- do.call(mkGlmerDevfun, c(glf, list(verbose = verbose,
+                                               control = control,
+                                               nAGQ = nAGQinit)))
+
+  rho <- environment(devfun)
+  start <- rho$pp$theta
   
   opt <- optimizeGlmer(devfun,
                        optimizer = control$optimizer[[1]],
@@ -497,6 +545,52 @@ step_through_multinomial <- function(df1=NULL, n_matchup=10, verbose=0) {
                        verbose=verbose,
                        calc.derivs=FALSE)
   
+  cc <- NULL
+  out <- mkMerMod(environment(devfun), opt, glf$reTrms, fr = glf$fr,
+                  mc = mcout, lme4conv=cc)
+  
+  out
+}
+
+#' @export 
+step_through_multinomial <- function(df1=NULL, n_matchup=10, verbose=0) {
+  if (is.null(df1)) {
+#    df1 <- simulate_data_as_matrix_resp(n_matchup = 10)
+    df1 <- simulate_data(n_matchup = 10)
+  }
+  
+  mc <- mcout <- match.call()
+  control <- lme4::glmerControl(optimizer = "nloptwrap")
+  nAGQinit <- 0
+  nAGQ <- 0
+  
+  glf <- lme4::glVecFormula(outcome ~ (1|fB) + (1|fP), 
+                            data=df1, nAGQ = 0, 
+                            family = multinomial, 
+                            control=control, verbose=1000)
+  
+  mcout$formula <- glf$formula
+  glf$formula <-  NULL # ??
+  
+  devfun <- do.call(mkGlmerDevfun, c(glf, list(verbose = verbose,
+                                                  control = control,
+                                                  nAGQ = nAGQinit)))
+  
+  rho <- environment(devfun)
+  start <- rho$pp$theta
+  
+  opt <- optimizeGlmer(devfun,
+                       optimizer = control$optimizer[[1]],
+                       ## DON'T try fancy edge tricks unless nAGQ=0 explicitly set
+                       restart_edge=if (nAGQ==0) control$restart_edge else FALSE,
+                       boundary.tol=if (nAGQ==0) control$boundary.tol else 0,
+                       control = control$optCtrl,
+                       start=start,
+                       nAGQ = 0,
+                       verbose=verbose,
+                       calc.derivs=FALSE)
+  
+  cc <- NULL
   out <- mkMerMod(environment(devfun), opt, glmod$reTrms, fr = glmod$fr,
            mc = mcout, lme4conv=cc)
   

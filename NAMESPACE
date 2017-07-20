@@ -245,7 +245,11 @@ S3method(getGroups,lmList4)
 
 ## multinomial dev
 export(simulate_data_as_matrix_resp)
+export(simulate_data)
 export(multinomial)
 export(glmer_vec)
 export(mkRespVecMod)
 export(step_through_multinomial)
+export(step_through_binomial)
+export(glVecFormula)
+export(is_multiclass_family)

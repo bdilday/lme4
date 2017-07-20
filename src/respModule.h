@@ -13,7 +13,8 @@
 
 namespace lme4 {
     typedef Eigen::Map<Eigen::VectorXd> MVec;
-
+    typedef Eigen::Map<Eigen::MatrixXd> MMat;
+    
     using Rcpp::CharacterVector;
     using Rcpp::Environment;
     using Rcpp::Language;
@@ -118,6 +119,18 @@ namespace lme4 {
 				// negative binomial distribution only
     };
 
+    class glmMultiResp : public glmResp {
+    protected:
+      MMat       d_eta_multi, d_mu_multi;
+    public:
+      glmMultiResp(Rcpp::List,SEXP,SEXP,SEXP,SEXP,SEXP,SEXP,SEXP,SEXP,SEXP,SEXP,SEXP);
+      
+      const MMat&           eta_multi() const {return d_eta_multi;}
+
+      //double            Laplace(double,double,double) const;
+    };
+    
+    
     class nlsResp : public lmResp {
     protected:
 	MVec            d_gamma;

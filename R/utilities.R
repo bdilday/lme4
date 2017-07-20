@@ -292,7 +292,34 @@ mkRespMod <- function(fr, REML=NULL, family = NULL, nlenv = NULL, nlmod = NULL, 
         unname(weights)
     } else rep.int(1, n)
 
-    if(isGLMM) {
+      
+    if (is_multiclass_family(family)) {
+      ## need weights for initializing evaluation
+      rho$nobs <- n
+      ## allow trivial objects, e.g. for simulation
+      if (length(y)>0) eval(family$initialize, rho)
+      ## ugh. this *is* necessary;
+      ##  family$initialize *ignores* mustart in env, overwrites!
+      ## see ll 180-182 of src/library/stats/R/glm.R
+      ## https://github.com/wch/r-source/search?utf8=%E2%9C%93&q=mukeep
+      if (!is.null(mustart_update)) rho$mustart <- mustart_update
+      ## family$initialize <- NULL     # remove clutter from str output
+      ll <- as.list(rho)
+      ll[["eta_multi"]] <- family$linkfun(mustart)
+      ll[["k_class"]] <- max(y)
+      ans <- do.call(new, c(list(Class="glmMultiResp", family=family),
+                            ll[setdiff(names(ll), c("m", "nobs", "mustart"))]))
+      
+      if (length(y)>0) {
+        if (is.null(etastart_update)) {
+          upmu_arg <- family$linkfun(rho$mustart)
+        } else {
+          upmu_arg <- etastart_update
+        }
+        ans$updateMu(upmu_arg)
+      }
+      ans
+    } else if(isGLMM) {
         ## need weights for initializing evaluation
         rho$nobs <- n
         ## allow trivial objects, e.g. for simulation
@@ -306,8 +333,14 @@ mkRespMod <- function(fr, REML=NULL, family = NULL, nlenv = NULL, nlmod = NULL, 
         ll <- as.list(rho)
         ans <- do.call(new, c(list(Class="glmResp", family=family),
                               ll[setdiff(names(ll), c("m", "nobs", "mustart"))]))
-        if (length(y)>0)
-            ans$updateMu(if (!is.null(es <- etastart_update)) es else                                       family$linkfun(rho$mustart))
+        if (length(y)>0) {
+          if (is.null(etastart_update)) {
+            upmu_arg <- family$linkfun(rho$mustart)
+          } else {
+            upmu_arg <- etastart_update
+          }
+          ans$updateMu(upmu_arg)
+        }
         ans
     } else if (is.null(nlenv)) ## lmer
         do.call(lmerResp$new, as.list(rho))

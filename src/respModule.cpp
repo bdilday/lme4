@@ -188,6 +188,18 @@ namespace lme4 {
 	d_n = n;
     }
 
+    /*****************************/
+    glmMultiResp::glmMultiResp(List fam, SEXP y, SEXP weights, SEXP offset,
+                     SEXP mu, SEXP sqrtXwt, SEXP sqrtrwt, SEXP wtres, SEXP eta, SEXP n,
+                     SEXP mu_multi, SEXP eta_multi)
+      : glmResp(fam, y, weights, offset, mu, sqrtXwt, sqrtrwt, wtres, eta, n),
+        d_mu_multi(as<MMat>(mu_multi)),
+        d_eta_multi(as<MMat>(eta_multi)) {
+    }
+    
+    
+    
+    /*****************************/
     nlsResp::nlsResp(SEXP y, SEXP weights, SEXP offset, SEXP mu, SEXP sqrtXwt,
 		     SEXP sqrtrwt, SEXP wtres, SEXP gamma, SEXP mm, SEXP ee,
 		     SEXP pp)

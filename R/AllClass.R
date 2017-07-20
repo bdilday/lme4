@@ -465,6 +465,42 @@ glmResp$lock("family", "n", "eta")
 
 
 ##' @export
+glmMultiResp <-
+  setRefClass("glmMultiResp", contains = "glmResp",
+              fields = list(
+                eta_multi = "matrix",
+                k_class = "numeric"
+                ),
+              methods=
+                list(initialize = function(...) {
+                  callSuper(...)
+                  ll <- list(...)
+                  k_class <<- ll$k_class
+                  eta_multi <<- ll$eta_multi
+                },
+                ptr       = function() {
+                  'returns the external pointer, regenerating if necessary'
+                  message('mu dim ', dim(mu), ' mu len ', length(mu))
+                  message('mu dim ', dim(eta), ' mu len ', length(eta))
+                  if (length(y)) {
+                    if (.Call(isNullExtPtr, Ptr)) {
+                      Ptr <<- .Call(glm_multi_Create, family, y, weights, offset, mu, sqrtXwt,
+                                    sqrtrwt, wtres, eta, n, mu_multi, eta_multi)
+                      .Call(glm_updateMu, Ptr, eta - offset)
+                    }
+                  }
+                  Ptr
+                },
+                updateMu = function(gamma) {
+                  'update mu, residuals, weights, etc. from the linear predictor'
+                  .Call(glm_multi_updateMu, ptr(), as.numeric(gamma))
+                }
+                
+                )
+  )
+
+
+##' @export
 nlsResp <-
     setRefClass("nlsResp", contains = "lmResp",
                 fields= list(gam   = "numeric",

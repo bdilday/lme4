@@ -1,0 +1,29 @@
+---
+title: "Notes on adding a multinomial model"
+author: "Ben Dilday"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+My goal is to add the capability to fit a multinomial model to `lme4`. This serves as notes on the process, what steps need to happen, and what steps have been taken.
+
+# The glmer model
+
+I am working mainly from the `lmer.pdf` vignette, and the `lrgprt.pdf` book draft. For the `glmer` model applied to categorical data, the key points are as follows.
+
+# multinomial extension
+
+A multinomial model is useful to fit a multiclass categorical outcome. I', focused on the case where the outcomes are unordered. For $K$ mutually exclusive categories, the outcome, which is an $n \times 1$ vector in a binomial model, becomes an $n \times (K-1)$ matrix. It is convenient to define $k = K-1$ and refer to the outcome as a $n \times k$ matrix. Similarly, the mean of the model, $\mu$ will be a $n \times k$ matrix. The result of applying the link function to $\mu$, refered to as $\eta$, will be $n \times k$ also. In a `lmer` or `glmer` model with a scaler output $\eta$ is the linear predictor $\eta = X \beta + Z \lambda u$, but for a vector-valued outcome, $\eta$ is a more complicated function of the model parameters. For example, with a multiclasslogit link, $mu$ and $\eta$ are 
+
+$$ \mu_i = \frac{e^{\eta_i}}{1 + \Sigma_{j}{e^{\eta_j}}} $$
+$$ \eta_i = \log{\frac{\mu_i}{1 - \Sigma_{j}{\mu_j}}} $$
+
+# random effects terms
+
+
+
+
