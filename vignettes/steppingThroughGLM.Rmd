@@ -1,0 +1,217 @@
+---
+title: "Stepping through a GLMM"
+author: "Ben Dilday"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+I'm working on adding a multinomial model to `lme4`. In order to figure out where the best places to change existing code and the best places to reuse existing code are, I've stepped through `glmer` bit by bit. 
+
+## tracing the code
+
+As part of my work with `lme4`, I;ve added some reproducible simulated data. To use th esame data as I'm working woth here you caninstall from github,
+
+``` {r, eval=FALSE}
+devtools::install_github('bdilday/lme4', ref='multinomial-dev')
+library(lme4)
+```
+
+``` {r, message=FALSE, echo=FALSE}
+library(lme4)
+```
+
+generate some simulated data. 
+
+``` {r}
+df1 <- simulate_data(n_matchup = 10)
+table(df1$outcome)
+```
+
+Since I'm focusing on multinomial models, my simulated data has more than 2 classes, but here I force there to be only two.
+
+``` {r}
+cc <- which(df1$outcome > 1)
+df1[cc,]$outcome <- 1
+table(df1$outcome)
+```
+
+## step through binomial glmer
+
+Using debug, I step through `glmer`,
+
+``` {r, eval=FALSE}
+debug(glmer)
+mod1 <- glmer(outcome ~ (1|fB) + (1|fP), data=df1, nAGQ = 0, family = binomial, control=lme4::glmerControl(optimizer = "nloptwrap"))
+```
+
+There are a bunch of checks, and eventually we come to,
+
+``` {r, eval=FALSE}
+devfun <- do.call(mkGlmerDevfun, c(glmod, list(verbose = verbose,
+                                               control = control,
+                                               nAGQ = nAGQinit)))
+```
+
+Before stepping further I add a debug command for `mkGlmerDevFun`. 
+
+``` {r, eval=FALSE}
+debug(mkGlmerDevFun)
+```
+
+Stepping through `mkGlmerDevFun` we come to,
+
+``` {r, eval=FALSE}
+mkRespMod(fr, family=family)
+```
+
+Debug that one...
+
+``` {r, eval=FALSE}
+debug(mkRespMod)
+```
+
+We come to,
+
+``` {r, eval=FALSE}
+ans <- do.call(new, c(list(Class="glmResp", family=family),
+                      ll[setdiff(names(ll), c("m", "nobs", "mustart"))]))
+```
+
+Now here's where it gets interesting
+
+## down the rabbit hole
+
+The call above (`new`) instantiates an `R` `S4` object of class `glmresp`. The code for that (from `AllClass.R` in `lme4`) looks like,
+
+``` {r, eval=FALSE}
+glmResp <-
+  setRefClass("glmResp", contains = "lmResp",
+              fields = list(eta = "numeric", family = "family", n = "numeric"),
+              methods=
+                list(initialize = function(...) {
+                  callSuper(...)
+                  ll <- list(...)
+                  if (is.null(ll$family)) stop("family must be specified")
+                  family <<- ll$family
+                  n <<- if (!is.null(ll$n)) as.numeric(ll$n) else rep.int(1,length(y))
+                  eta <<- if (!is.null(ll$eta)) as.numeric(ll$eta) else numeric(length(y))
+                },
+```
+
+and etc...
+
+The `contains="lmResp"` line means that the `glmResp` class inherits from `lmResp`; if you look at the definition of `lmResp` you see that one of the fields is an external pointer (`externalptr`), `Ptr`.
+
+``` {r, eval=FALSE}
+lmResp <-
+  setRefClass("lmResp",
+              fields =
+                list(Ptr     = "externalptr",
+                     mu      = "numeric",
+                     offset  = "numeric",
+                     sqrtXwt = "numeric",
+                     sqrtrwt = "numeric",
+                     weights = "numeric",
+                     wtres   = "numeric",
+                     y       = "numeric"),
+              methods =
+```
+
+For the `lmResp` class, `Ptr` is explictly instantiated, but for the `glmResp` class, the instantiation of `Ptr` happens indeirectly through a call to `ptr()`. The code looks like,
+
+``` {r, eval=FALSE}
+ptr       = function() {
+  'returns the external pointer, regenerating if necessary'
+  if (length(y)) {
+    if (.Call(isNullExtPtr, Ptr)) {
+      Ptr <<- .Call(glm_Create, family, y, weights, offset, mu, sqrtXwt,
+                    sqrtrwt, wtres, eta, n)
+      .Call(glm_updateMu, Ptr, eta - offset)
+    }
+  }
+  Ptr
+}
+```
+
+The `.Call(glm_Create...)` instantiates a `glmResp` object implemented in `C++`. The code looks like,
+
+``` {r, eval=FALSE}
+glmResp::glmResp(List fam, SEXP y, SEXP weights, SEXP offset,
+		     SEXP mu, SEXP sqrtXwt, SEXP sqrtrwt, SEXP wtres, SEXP eta, SEXP n)
+	: lmResp(y, weights, offset, mu, sqrtXwt, sqrtrwt, wtres),
+	  d_fam(fam),
+	  d_eta(as<MVec>(eta)),
+	  d_n(as<MVec>(n)) {
+	  }
+```
+
+As with the `R` definition of a `glmResp` object, this derives from the `lmResp` class (but implemented in `C++`); this `C++` `glmResp` object is essentially a mirror of the `glmResp` object implemented in `R`.
+
+To go back to the instantiation of the `Ptr`, thorugh the `ptr()` function, in the `R` version of `glmResp`, the next step is
+
+``` {r, eval=FALSE}
+.Call(glm_updateMu, Ptr, eta - offset)
+```
+
+The body of `glm_updateMu` looks like,
+
+``` {r, eval=FALSE}
+SEXP glm_updateMu(SEXP ptr_, SEXP gamma) {
+  BEGIN_RCPP;
+  return ::Rf_ScalarReal(XPtr<glmResp>(ptr_)->updateMu(as<MVec>(gamma)));
+  END_RCPP;
+}
+```
+
+So the `R` code (remember we're still inside of `do.call(new, c(list(Class="glmResp"...)))`) calls a `C++` function, passing it a pointer to an `C++` object, and a numeric vector. The pointer is explicitly cast as a pointer to a `glmResp` type (the `C++` version, not the `R` version), and the method `updateMu`, of the `C++` object, is called. The body of the `updateMu` method looks like,
+
+``` {r, eval=FALSE}
+double glmResp::updateMu(const VectorXd& gamma) {
+  d_eta = d_offset + gamma;
+  d_mu  = d_fam.linkInv(d_eta);
+  return updateWrss();
+}
+```
+
+The `updateMu` method not only updates `mu` based on `gamma`, the linear predictor, but also calls `updateWrss`, which we'll come back to.
+
+Before coming to that, note the call `d_mu  = d_fam.linkInv(d_eta);`. This calls, 
+
+``` {r, eval=FALSE}
+const ArrayXd glmLink::linkInv(const ArrayXd& eta) const {
+  return as<ArrayXd>(::Rf_eval(
+    ::Rf_lang2(as<SEXP>(d_linkInv),
+               as<SEXP>(Rcpp::NumericVector(eta.data(),
+                                            eta.data() + eta.size()))
+    ), d_rho));
+}
+```
+
+This is a `C++` function **that calls back to the `R` definition of the `linkInv` function, `d_linkInv`**. For this particular model, and particular family and link function, is,
+
+``` {r}
+(binomial())$linkinv 
+```
+
+`C_logit_linkinv` applies the inverse logit, and is defined in the `C` source code of the `stats` module of base `R`. 
+
+## review
+
+Phew. Ok let's review that.
+
+* We instantiate a `glmResp` object in `R`
+
+* As part of this process, we instantiate a parallel `glmResp` object in `C++`
+
+* Instantiating this pointer calls an `updateMu` method on the `C++` object
+
+* as part of it's execution, the `updateMu` method calls the `linkInv` function of the `C++` object
+
+* this `C++` object calls the `R` version of `linkInv`
+
+* the `R` version of `linkInv` calls a `C` version of the inverse link
+

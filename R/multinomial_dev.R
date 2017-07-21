@@ -184,7 +184,7 @@ multinomial <- function (link = "multiclasslogit") {
   # TODO: finish this  
   linkinv <- function(eta) {
     dd <- dim(eta)
-    message('dim(eta) ', dd, ' ', is.null(dd), ' ', length(eta))
+    message('multinomial linkinv dim(eta) ', dd, ' ', is.null(dd), ' ', length(eta))
     stopifnot(!is.null(dd))
     stopifnot(length(dd) == 2)
     exp(eta)/(1+rowSums(exp(eta)))

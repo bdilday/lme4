@@ -119,14 +119,24 @@ namespace lme4 {
 				// negative binomial distribution only
     };
 
+    /******************************************/
     class glmMultiResp : public glmResp {
     protected:
-      MMat       d_eta_multi, d_mu_multi;
-    public:
-      glmMultiResp(Rcpp::List,SEXP,SEXP,SEXP,SEXP,SEXP,SEXP,SEXP,SEXP,SEXP,SEXP,SEXP);
+      MMat       d_mu_multi, d_eta_multi;
+      MVec       d_k_class;
       
-      const MMat&           eta_multi() const {return d_eta_multi;}
+    public:
+      glmMultiResp(Rcpp::List,
+                   SEXP,SEXP,SEXP,
+                   SEXP,SEXP,SEXP,
+                   SEXP,SEXP,SEXP,
+                   SEXP,SEXP,SEXP);
+      
+      const MMat&  eta_multi() const {return d_eta_multi;}
 
+      double      updateMu(const Eigen::VectorXd&);
+      double      updateWrss(); /**< update the weighted residuals and d_wrss */
+    
       //double            Laplace(double,double,double) const;
     };
     

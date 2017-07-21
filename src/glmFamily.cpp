@@ -433,6 +433,7 @@ namespace glm {
     }
 
     const ArrayXd glmLink::linkInv(const ArrayXd& eta) const {
+      Rcpp::Rcout << " calling C glmLink::linkInv " << std::endl;
 	return as<ArrayXd>(::Rf_eval(::Rf_lang2(as<SEXP>(d_linkInv),
 						as<SEXP>(Rcpp::NumericVector(eta.data(),
 									     eta.data() + eta.size()))

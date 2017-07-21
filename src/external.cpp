@@ -201,11 +201,11 @@ extern "C" {
     
     SEXP glm_multi_Create(SEXP fam, SEXP y, SEXP weights, SEXP offset, SEXP mu,
                           SEXP sqrtXwt, SEXP sqrtrwt, SEXP wtres, SEXP eta, SEXP n, 
-                          SEXP mu_multi, SEXP eta_multi) {
+                          SEXP mu_multi, SEXP eta_multi, SEXP k_class) {
       BEGIN_RCPP;
       glmMultiResp *ans = new glmMultiResp(List(fam), y, weights, offset, mu,
                                            sqrtXwt, sqrtrwt, wtres, eta, n, 
-                                           mu_multi, eta_multi);
+                                           mu_multi, eta_multi, k_class);
       return wrap(XPtr<glmMultiResp>(ans, true));
       END_RCPP;
     }
@@ -1159,7 +1159,7 @@ static R_CallMethodDef CallEntries[] = {
     CALLDEF(glm_updateMu,       2),
     CALLDEF(glm_updateWts,      1),
 
-    CALLDEF(glm_multi_Create,   12),    // generate external pointer
+    CALLDEF(glm_multi_Create,   13),    // generate external pointer
     CALLDEF(glm_multi_updateMu, 2),
     
     

@@ -306,6 +306,7 @@ mkRespMod <- function(fr, REML=NULL, family = NULL, nlenv = NULL, nlmod = NULL, 
       ## family$initialize <- NULL     # remove clutter from str output
       ll <- as.list(rho)
       ll[["eta_multi"]] <- family$linkfun(mustart)
+      ll[["mu_multi"]] <- family$linkfun(mustart)
       ll[["k_class"]] <- max(y)
       ans <- do.call(new, c(list(Class="glmMultiResp", family=family),
                             ll[setdiff(names(ll), c("m", "nobs", "mustart"))]))

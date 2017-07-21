@@ -469,6 +469,7 @@ glmMultiResp <-
   setRefClass("glmMultiResp", contains = "glmResp",
               fields = list(
                 eta_multi = "matrix",
+                mu_multi = "matrix",
                 k_class = "numeric"
                 ),
               methods=
@@ -477,23 +478,33 @@ glmMultiResp <-
                   ll <- list(...)
                   k_class <<- ll$k_class
                   eta_multi <<- ll$eta_multi
+                  mu_multi <<- ll$mu_multi
                 },
                 ptr       = function() {
                   'returns the external pointer, regenerating if necessary'
                   message('mu dim ', dim(mu), ' mu len ', length(mu))
-                  message('mu dim ', dim(eta), ' mu len ', length(eta))
+                  message('eta dim ', dim(eta), ' eta len ', length(eta))
+                  message('mu_multi dim ', dim(mu_multi), ' mu_multi len ', length(mu_multi))
+                  message('eta_multi dim ', dim(eta_multi), ' eta_multi len ', length(eta_multi))
+                  
                   if (length(y)) {
                     if (.Call(isNullExtPtr, Ptr)) {
+                      message('call glm_multi_Create...')
                       Ptr <<- .Call(glm_multi_Create, family, y, weights, offset, mu, sqrtXwt,
-                                    sqrtrwt, wtres, eta, n, mu_multi, eta_multi)
-                      .Call(glm_updateMu, Ptr, eta - offset)
+                                    sqrtrwt, wtres, eta, n, mu_multi, eta_multi, k_class)
+                      message('...done glm_multi_Create')
+                      message('call glm_multi_updateMu... len(eta_multi) ', 
+                              length(eta_multi), ' dim(eta_multi) ', dim(eta_multi))
+                      .Call(glm_multi_updateMu, Ptr, eta_multi)
+                      message('... done glm_multi_updateMu')
                     }
                   }
                   Ptr
                 },
                 updateMu = function(gamma) {
                   'update mu, residuals, weights, etc. from the linear predictor'
-                  .Call(glm_multi_updateMu, ptr(), as.numeric(gamma))
+                  message('call glmMultiResp R updateMu len(gamma) ', length(gamma), ' dim(gamma) ', dim(gamma))
+                  .Call(glm_multi_updateMu, ptr(), gamma)
                 }
                 
                 )

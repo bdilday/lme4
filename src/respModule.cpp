@@ -10,6 +10,7 @@
 namespace lme4 {
     using Eigen::ArrayXd;
     using Eigen::VectorXd;
+    using Eigen::MatrixXd;
 
     using Rcpp::List;
     using Rcpp::NumericMatrix;
@@ -19,6 +20,7 @@ namespace lme4 {
     using std::invalid_argument;
 
     typedef Eigen::Map<VectorXd>  MVec;
+    typedef Eigen::Map<MatrixXd>  MMat;
 
     lmResp::lmResp(SEXP y, SEXP weights, SEXP offset, SEXP mu, SEXP sqrtXwt,
 		   SEXP sqrtrwt, SEXP wtres)
@@ -191,13 +193,42 @@ namespace lme4 {
     /*****************************/
     glmMultiResp::glmMultiResp(List fam, SEXP y, SEXP weights, SEXP offset,
                      SEXP mu, SEXP sqrtXwt, SEXP sqrtrwt, SEXP wtres, SEXP eta, SEXP n,
-                     SEXP mu_multi, SEXP eta_multi)
+                     SEXP mu_multi, SEXP eta_multi, SEXP k_class)
       : glmResp(fam, y, weights, offset, mu, sqrtXwt, sqrtrwt, wtres, eta, n),
         d_mu_multi(as<MMat>(mu_multi)),
-        d_eta_multi(as<MMat>(eta_multi)) {
+        d_eta_multi(as<MMat>(eta_multi)),
+        d_k_class(as<MVec>(k_class)) {
     }
     
+    double glmMultiResp::updateMu(const VectorXd& gamma) {
+      Rcpp::NumericVector V;
+      Rcpp::Rcout << " calling C glmMultiResp::updateMu " <<
+        gamma.size() << 
+        " " << gamma.cols() << 
+        " " << gamma.rows() << 
+        " " << d_k_class << 
+        " " << d_k_class.size() << 
+        " " << d_y.size() <<
+        std::endl;
+      int debug=0;
+//      d_eta = d_offset + gamma; // lengths are checked here
+
+      V = Rcpp::wrap(gamma);
+      V.attr("dim") = Rcpp::Dimension(d_y.size(), d_k_class(0));
+     // d_mu  = d_fam.linkInv(V);
+     d_mu  = d_fam.linkInv(gamma);
+      if (debug) Rcpp::Rcout << "updateMu: min mu:" << 
+        d_mu.minCoeff() << " max mu: " << 
+          d_mu.maxCoeff() << std::endl;
+      return updateWrss();
+    }
     
+    double glmMultiResp::updateWrss() {
+      Rcpp::Rcout << " calling C glmMultiResp::updateWrss " << std::endl;
+      d_wtres = d_sqrtrwt.cwiseProduct(d_y - d_mu);
+      d_wrss  = d_wtres.squaredNorm();
+      return d_wrss;
+    }
     
     /*****************************/
     nlsResp::nlsResp(SEXP y, SEXP weights, SEXP offset, SEXP mu, SEXP sqrtXwt,
