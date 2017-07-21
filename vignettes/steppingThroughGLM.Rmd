@@ -215,3 +215,5 @@ Phew. Ok let's review that.
 
 * the `R` version of `linkInv` calls a `C` version of the inverse link
 
+This seems like a lot of indirection. I assume the reason for that is to have flexibility in specifying family and link function of a general `GLMM`; but it seems to add a new, multinomial, model, some of these middle-man steps could be taken out. For example, don't bother creating a `glmResp` object in `C++`, just crate an `R` one; don't use a `C++` function to call an `R` function, which then calls a `C` function, just execute the inverse link in `C++` directly;
+
