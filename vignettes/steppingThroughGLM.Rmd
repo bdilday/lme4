@@ -261,7 +261,15 @@ SEXP glmerLaplace(SEXP pp_, SEXP rp_, SEXP nAGQ_, SEXP tol_, SEXP maxit_, SEXP v
     }
 ```
 
-`pwrssUpdate` is pretty complex and looks like,
+`rp->Laplace()` looks like,
+
+```
+double glmResp::Laplace(double ldL2, double ldRX2, double sqrL) const {
+	return ldL2 + sqrL + aic();
+}
+```
+
+But first the `C++` implementation of `pwrssUpdate` updates the model and iterates until it converges. If the fit gets worse during a setp, it reduces the size of the steps.
 
 ```
 static void pwrssUpdate(glmResp *rp, merPredD *pp, bool uOnly,
@@ -274,59 +282,20 @@ static void pwrssUpdate(glmResp *rp, merPredD *pp, bool uOnly,
 
 	pdev = oldpdev; // define so debugging statements work on first step
 	for (int i = 0; i < maxit; i++) {
-	    if (verb) {
-		Rcpp::Rcout << "*** pwrssUpdate step " << i << std::endl;
-		if (debug) {
-		    Rcpp::Rcout << "\nmin delu at iteration " << i << ": " << pp->delu().minCoeff() << std::endl;
-		    Rcpp::Rcout << "\nmax delu at iteration " << i << ": " << pp->delu().maxCoeff() << std::endl;
-		    Rcpp::Rcout << "\nresDev before dels, iter:  " << i << ",  " << rp->resDev() << std::endl;
-		// FIXME: would like to print this in row, not column, format
-		// 
-		    Rcpp::Rcout << "before update:" << "pdev = " << pdev << std::endl; // if (verb) 
-		}
-	    }
 	    Vec   olddelu(pp->delu()), olddelb(pp->delb());
 	    pdev = internal_glmerWrkIter(pp, rp, uOnly);
-	    if (verb) {
-		Rcpp::Rcout << "pdev=" << pdev << 
-		    "; delu_min: " << pp->delu().minCoeff() <<
-		    "; delu_max: " << pp->delu().maxCoeff() <<
-		    "; delb_min: " << pp->delb().minCoeff() <<
-		    "; delb_max: " << pp->delb().maxCoeff() <<
-		    std::endl; // if (verb) 
-	    }
 	    if (std::abs((oldpdev - pdev) / pdev) < tol) {cvgd = true; break;}
-
-	    // if (pdev != pdev) Rcpp::Rcout << "nan detected" << std::endl;
-	    // if (isnan(pdev)) Rcpp::Rcout << "nan detected" << std::endl;
-
-	    // trying to detect nan; may be hard to do it completely portably,
-	    // and hard to detect in advance (i.e. what conditions lead to
-	    // nan from internal_glmerWrkIter ... ?)
-	    // http://stackoverflow.com/questions/570669/checking-if-a-double-or-float-is-nan-in-c
-	    // check use of isnan() in base R code, or other Rcpp code??
 #define isNAN(a)  (a!=a)
 	    if (isNAN(pdev) || (pdev > oldpdev)) { 
 		// PWRSS step led to _larger_ deviation, or nan; try step halving
-		if (verb) Rcpp::Rcout << 
-			      "\npwrssUpdate: Entering step halving loop" 
-				      << std::endl;
 		for (int k = 0; k < maxstephalfit && 
 			 (isNAN(pdev) || (pdev > oldpdev)); k++) {
 		    pp->setDelu((olddelu + pp->delu())/2.);
 		    if (!uOnly) pp->setDelb((olddelb + pp->delb())/2.);
 		    rp->updateMu(pp->linPred(1.));
 		    pdev = rp->resDev() + pp->sqrL(1.);
-		    if (moreverb) {
-			Rcpp::Rcout << "step-halving iteration " <<
-			    k << ":  pdev=" << pdev << 
-			    "; delu_min: " << pp->delu().minCoeff() <<
-			    "; delu_max: " << pp->delu().maxCoeff() <<
-			    "; delb_min: " << pp->delb().minCoeff() <<
-			    "; delb_max: " << pp->delb().maxCoeff() <<
-			    std::endl; 
-		    } // if (moreverb) 
 		}
+		
 		if (isNAN(pdev) || ((pdev - oldpdev) > tol) )
 		    // FIXME: fill in max halfsetp iters in error statement
 		    throw runtime_error("(maxstephalfit) PIRLS step-halvings failed to reduce deviance in pwrssUpdate");
@@ -338,3 +307,532 @@ static void pwrssUpdate(glmResp *rp, merPredD *pp, bool uOnly,
 	    throw runtime_error("pwrssUpdate did not converge in (maxit) iterations");
     }
 ```
+
+The most important step is `internal_glmerWrkIter`, 
+
+```
+static double internal_glmerWrkIter(merPredD *pp, glmResp *rp, bool uOnly) {
+	pp->updateXwts(rp->sqrtWrkWt());
+	pp->updateDecomp();
+	pp->updateRes(rp->wtWrkResp());
+	if (uOnly) pp->solveU();
+        else pp->solve();
+	rp->updateMu(pp->linPred(1.));
+	return rp->resDev() + pp->sqrL(1.);
+}
+```
+
+First we call `pp->updateXwts` with argument `rp->sqrtWrkWt()`
+
+```
+ArrayXd glmResp::sqrtWrkWt() const {
+	return muEta() * (d_weights.array() / variance()).sqrt();
+}
+
+void merPredD::updateXwts(const ArrayXd& sqrtXwt) {
+  if (d_Xwts.size() != sqrtXwt.size())
+   throw invalid_argument("updateXwts: dimension mismatch");
+  std::copy(sqrtXwt.data(), sqrtXwt.data() + sqrtXwt.size(), d_Xwts.data());
+  if (sqrtXwt.size() == d_V.rows()) { // W is diagonal
+   d_V              = d_Xwts.asDiagonal() * d_X;
+   for (int j = 0; j < d_N; ++j)
+   for (MSpMatrixd::InnerIterator Utj(d_Ut, j), Ztj(d_Zt, j);
+    Utj && Ztj; ++Utj, ++Ztj)
+     Utj.valueRef() = Ztj.value() * d_Xwts.data()[j];
+  } else {
+   SpMatrixd      W(d_V.rows(), sqrtXwt.size());
+   const double *pt = sqrtXwt.data();
+   W.reserve(sqrtXwt.size());
+   for (Index j = 0; j < W.cols(); ++j, ++pt) {
+    W.startVec(j);
+    W.insertBack(j % d_V.rows(), j) = *pt;
+   }
+   W.finalize();
+   d_V              = W * d_X;
+   SpMatrixd      Ut(d_Zt * W.adjoint());
+   if (Ut.cols() != d_Ut.cols())
+    throw std::runtime_error("Size mismatch in updateXwts");
+  
+   // More complex code to handle the pruning of zeros
+   MVec(d_Ut.valuePtr(), d_Ut.nonZeros()).setZero();
+   for (int j = 0; j < d_Ut.outerSize(); ++j) {
+    MSpMatrixd::InnerIterator lhsIt(d_Ut, j);
+    for (SpMatrixd::InnerIterator  rhsIt(Ut, j); rhsIt; ++rhsIt, ++lhsIt) {
+     Index                         k(rhsIt.index());
+     while (lhsIt && lhsIt.index() != k) ++lhsIt;
+     if (lhsIt.index() != k)
+      throw std::runtime_error("Pattern mismatch in updateXwts");
+     lhsIt.valueRef() = rhsIt.value();
+    }
+   }
+  }
+  d_VtV.setZero().selfadjointView<Eigen::Upper>().rankUpdate(d_V.adjoint());
+  updateL();
+}
+```
+
+After updating weights, we call `updateL` at the end,
+
+```
+void merPredD::updateL() {
+    updateLamtUt();
+    // More complicated code to handle the case of zeros in
+    // potentially nonzero positions.  The factorize_p method is
+    // for a SparseMatrix<double>, not a MappedSparseMatrix<double>.
+    SpMatrixd  m(d_LamtUt.rows(), d_LamtUt.cols());
+    m.resizeNonZeros(d_LamtUt.nonZeros());
+    std::copy(d_LamtUt.valuePtr(),
+     d_LamtUt.valuePtr() + d_LamtUt.nonZeros(),
+     m.valuePtr());
+    std::copy(d_LamtUt.innerIndexPtr(),
+     d_LamtUt.innerIndexPtr() + d_LamtUt.nonZeros(),
+     m.innerIndexPtr());
+    std::copy(d_LamtUt.outerIndexPtr(),
+     d_LamtUt.outerIndexPtr() + d_LamtUt.cols() + 1,
+     m.outerIndexPtr());
+    d_L.factorize_p(m, Eigen::ArrayXi(), 1.);
+    d_ldL2 = ::M_chm_factor_ldetL2(d_L.factor());
+}
+```
+
+The next step is `updateDecomp`
+
+```
+void merPredD::updateDecomp() {
+  updateDecomp(NULL);
+}
+
+// using a point so as to detect NULL
+void merPredD::updateDecomp(const MatrixXd* xPenalty) {  // update L, RZX and RX
+
+  if (d_LamtUt.cols() != d_V.rows()) {
+    ::Rf_warning("dimension mismatch in updateDecomp()");
+    // Rcpp::Rcout << "WARNING: dimension mismatch in updateDecomp(): " <<
+    // " LamtUt=" << d_LamtUt.rows() << "x" << d_LamtUt.cols() << 
+    // "; V=" << d_V.rows() << "x" << d_V.cols() << " " <<
+    // std::endl;
+  }
+  d_RZX         = d_LamtUt * d_V;
+  if (d_p > 0) {
+    d_L.solveInPlace(d_RZX, CHOLMOD_P);
+    d_L.solveInPlace(d_RZX, CHOLMOD_L);
+    if (debug) Rcpp::Rcout << "updateDecomp 4" << std::endl;
+    MatrixXd      VtVdown(d_VtV);
+    
+    if (xPenalty == NULL)
+    d_RX.compute(VtVdown.selfadjointView<Eigen::Upper>().rankUpdate(d_RZX.adjoint(), -1));
+    else {
+    d_RX.compute(VtVdown.selfadjointView<Eigen::Upper>().rankUpdate(d_RZX.adjoint(), -1).rankUpdate(*xPenalty, 1));
+    }
+    if (d_RX.info() != Eigen::Success)
+    ::Rf_error("Downdated VtV is not positive definite");
+    d_ldRX2         
+      = 2. * d_RX.matrixLLT().diagonal().array().abs().log().sum();
+      if (debug) Rcpp::Rcout << "updateDecomp 6" << std::endl;
+  }
+}
+```
+
+Then `updateRes`, which has argument `wtWrkResp`
+
+```
+ArrayXd glmResp::wrkResp() const {
+	return (d_eta - d_offset).array() + wrkResids();
+}
+
+ArrayXd glmResp::wtWrkResp() const {
+	return wrkResp() * sqrtWrkWt();
+}
+
+ArrayXd glmResp::sqrtWrkWt() const {
+	return muEta() * (d_weights.array() / variance()).sqrt();
+}
+
+
+void merPredD::updateRes(const VectorXd& wtres) {
+  if (d_V.rows() != wtres.size())
+  throw invalid_argument("updateRes: dimension mismatch");
+  d_Vtr           = d_V.adjoint() * wtres;
+  d_Utr           = d_LamtUt * wtres;
+}
+```
+
+The either `solve` or `solveU`,
+
+```
+merPredD::Scalar merPredD::solve() {
+  d_delu          = d_Utr - d_u0;
+  d_L.solveInPlace(d_delu, CHOLMOD_P);
+  d_L.solveInPlace(d_delu, CHOLMOD_L);    // d_delu now contains cu
+  d_CcNumer       = d_delu.squaredNorm(); // numerator of convergence criterion
+  
+  d_delb          = d_RX.matrixL().solve(d_Vtr - d_RZX.adjoint() * d_delu);
+  d_CcNumer      += d_delb.squaredNorm(); // increment CcNumer
+  d_RX.matrixU().solveInPlace(d_delb);
+  
+  d_delu         -= d_RZX * d_delb;
+  d_L.solveInPlace(d_delu, CHOLMOD_Lt);
+  d_L.solveInPlace(d_delu, CHOLMOD_Pt);
+  return d_CcNumer;
+}
+```
+
+Then `updateMu` with argument `linPred`
+
+```
+VectorXd merPredD::b(const double& f) const {return d_Lambdat.adjoint() * u(f);}
+
+VectorXd merPredD::beta(const double& f) const {return d_beta0 + f * d_delb;}
+
+VectorXd merPredD::linPred(const double& f) const {
+  return d_X * beta(f) + d_Zt.adjoint() * b(f);
+}
+
+double glmResp::updateMu(const VectorXd& gamma) {
+	d_eta = d_offset + gamma; // lengths are checked here
+	d_mu  = d_fam.linkInv(d_eta);
+	return updateWrss();
+}
+```
+
+`updateWrss` is a method of the `lmResp` class,
+
+```
+double lmResp::updateWrss() {
+	d_wtres = d_sqrtrwt.cwiseProduct(d_y - d_mu);
+	d_wrss  = d_wtres.squaredNorm();
+	return d_wrss;
+}
+```
+
+Since `wrss` is not the log-likelihood of a `glm` I wonder what the purpose of this is. 
+
+Finally, we return `rp->resDev() + pp->sqrL(1.)`
+
+```
+double glmResp::resDev() const {
+	return devResid().sum();
+}
+
+ArrayXd glmResp::devResid() const {
+	return d_fam.devResid(d_y, d_mu, d_weights);
+}
+
+VectorXd merPredD::u(const double& f) const {return d_u0 + f * d_delu;}
+
+merPredD::Scalar merPredD::sqrL(const double& f) const {return u(f).squaredNorm();}
+```
+
+The `glmResp::devResid()` method is where the actual log-likelihood is applied. Note that the `binomialDist::devResid` `C++` code is used for the deviance residual because the constructor of (`glmResp` or `merPredD`?) read the name of the statistical family that was passed; in this case the return value of the `stats::binomial` function. If the family is not defined in `C++` then it falls back to the `R` implementation of the `devResid` function defined in `stats::binomial`. In the case of `binomial`, this is a native `C` function, so defining the function a second time in `C++` seems of dubious value, but maybe there's some overhead to passing the data and calling the `C` function that makes evaluating the function on `C++` more efficient.
+
+``` {r, eval=TRUE}
+binomial()$dev.resids
+```
+
+Following is the `C++` implementation,
+
+```
+const ArrayXd         binomialDist::devResid(const ArrayXd& y, const ArrayXd& mu, const ArrayXd& wt) const {
+	int debug=0;
+	if (debug) {
+	    for (int i=0; i < mu.size(); ++i) {
+		double r = 2. * wt[i] * (Y_log_Y(y[i], mu[i]) + Y_log_Y(1. - y[i], 1. - mu[i]));
+		if (r!=r) {  
+		    // attempt to detect `nan` (needs cross-platform testing, but should compile 
+		    // everywhere whether or not it actually works)
+		    Rcpp::Rcout << "(bD) " << "nan @ pos " << i << ": y= " << y[i] 
+				<< "; mu=" << mu[i] 
+				<< "; wt=" << wt[i] 
+				<< "; 1-y=" << 1. - y[i] 
+				<< "; 1-mu=" << 1. - mu[i] 
+				<< "; ylogy=" << Y_log_Y(y[i], mu[i]) 
+				<< "; cylogy=" << Y_log_Y(1.-y[i], 1.-mu[i]) 
+				<< std::endl;
+		}
+	    }
+	}
+	return 2. * wt * (Y_log_Y(y, mu) + Y_log_Y(1. - y, 1. - mu));
+    }
+```
+
+
+## reference methods
+
+For reference, the internal components of the `glmResp` class look like,
+
+```
+double  glmResp::aic() const {
+	return d_fam.aic(d_y, d_n, d_mu, d_weights, resDev());
+}
+
+ArrayXd glmResp::devResid() const {
+	return d_fam.devResid(d_y, d_mu, d_weights);
+}
+
+ArrayXd glmResp::muEta() const {
+	return d_fam.muEta(d_eta);
+}
+
+ArrayXd glmResp::variance() const {
+	return d_fam.variance(d_mu);
+}
+
+ArrayXd glmResp::wrkResids() const {
+	return (d_y - d_mu).array() / muEta();
+}
+
+ArrayXd glmResp::wrkResp() const {
+	return (d_eta - d_offset).array() + wrkResids();
+}
+
+ArrayXd glmResp::wtWrkResp() const {
+	return wrkResp() * sqrtWrkWt();
+}
+
+ArrayXd glmResp::sqrtWrkWt() const {
+	return muEta() * (d_weights.array() / variance()).sqrt();
+}
+
+double glmResp::Laplace(double ldL2, double ldRX2, double sqrL) const {
+	return ldL2 + sqrL + aic();
+}
+
+double glmResp::resDev() const {
+	return devResid().sum();
+}
+
+double glmResp::updateMu(const VectorXd& gamma) {
+	d_eta = d_offset + gamma; // lengths are checked here
+	d_mu  = d_fam.linkInv(d_eta);
+	return updateWrss();
+}
+
+double glmResp::updateWts() {
+	d_sqrtrwt = (d_weights.array() / variance()).sqrt();
+	d_sqrtXwt = muEta() * d_sqrtrwt.array();
+	return updateWrss();
+}
+
+void glmResp::setN(const VectorXd& n) {
+	if (n.size() != d_n.size())
+	    throw invalid_argument("n size mismatch");
+	d_n = n;
+}
+
+```
+
+and of the `merPredD` object, 
+
+```
+void merPredD::updateLamtUt() {
+        // This complicated code bypasses problems caused by Eigen's
+        // sparse/sparse matrix multiplication pruning zeros.  The
+        // Cholesky decomposition croaks if the structure of d_LamtUt changes.
+        MVec(d_LamtUt.valuePtr(), d_LamtUt.nonZeros()).setZero();
+        for (Index j = 0; j < d_Ut.outerSize(); ++j) {
+            for(MSpMatrixd::InnerIterator rhsIt(d_Ut, j); rhsIt; ++rhsIt) {
+                Scalar                        y(rhsIt.value());
+                Index                         k(rhsIt.index());
+                MSpMatrixd::InnerIterator prdIt(d_LamtUt, j);
+                for (MSpMatrixd::InnerIterator lhsIt(d_Lambdat, k); lhsIt; ++lhsIt) {
+                    Index                     i = lhsIt.index();
+                    while (prdIt && prdIt.index() != i) ++prdIt;
+                    if (!prdIt) throw runtime_error("logic error in updateLamtUt");
+                    prdIt.valueRef()           += lhsIt.value() * y;
+                }
+            }
+        }
+    }
+
+VectorXd merPredD::b(const double& f) const {return d_Lambdat.adjoint() * u(f);}
+
+VectorXd merPredD::beta(const double& f) const {return d_beta0 + f * d_delb;}
+
+VectorXd merPredD::linPred(const double& f) const {
+  return d_X * beta(f) + d_Zt.adjoint() * b(f);
+}
+
+VectorXd merPredD::u(const double& f) const {return d_u0 + f * d_delu;}
+
+merPredD::Scalar merPredD::sqrL(const double& f) const {return u(f).squaredNorm();}
+
+void merPredD::updateL() {
+    updateLamtUt();
+    // More complicated code to handle the case of zeros in
+    // potentially nonzero positions.  The factorize_p method is
+    // for a SparseMatrix<double>, not a MappedSparseMatrix<double>.
+    SpMatrixd  m(d_LamtUt.rows(), d_LamtUt.cols());
+    m.resizeNonZeros(d_LamtUt.nonZeros());
+    std::copy(d_LamtUt.valuePtr(),
+    d_LamtUt.valuePtr() + d_LamtUt.nonZeros(),
+    m.valuePtr());
+    std::copy(d_LamtUt.innerIndexPtr(),
+    d_LamtUt.innerIndexPtr() + d_LamtUt.nonZeros(),
+    m.innerIndexPtr());
+    std::copy(d_LamtUt.outerIndexPtr(),
+    d_LamtUt.outerIndexPtr() + d_LamtUt.cols() + 1,
+    m.outerIndexPtr());
+    d_L.factorize_p(m, Eigen::ArrayXi(), 1.);
+    d_ldL2 = ::M_chm_factor_ldetL2(d_L.factor());
+}
+
+void merPredD::setTheta(const VectorXd& theta) {
+  if (theta.size() != d_theta.size()) {
+  	throw invalid_argument("theta size mismatch");
+	}
+	// update theta
+	std::copy(theta.data(), theta.data() + theta.size(), 
+		  d_theta.data());
+	// update Lambdat
+	int    *lipt = d_Lind.data();
+	double *LamX = d_Lambdat.valuePtr(), *thpt = d_theta.data();
+	for (int i = 0; i < d_Lind.size(); ++i) {
+	    LamX[i] = thpt[lipt[i] - 1];
+	}
+}
+
+void merPredD::setZt(const VectorXd& ZtNonZero) {
+  double *ZtX = d_Zt.valuePtr(); // where the nonzero values of Zt live
+  std::copy(ZtNonZero.data(), ZtNonZero.data() + ZtNonZero.size(), ZtX);
+}
+
+
+merPredD::Scalar merPredD::solve() {
+  d_delu          = d_Utr - d_u0;
+  d_L.solveInPlace(d_delu, CHOLMOD_P);
+  d_L.solveInPlace(d_delu, CHOLMOD_L);    // d_delu now contains cu
+  d_CcNumer       = d_delu.squaredNorm(); // numerator of convergence criterion
+  
+  d_delb          = d_RX.matrixL().solve(d_Vtr - d_RZX.adjoint() * d_delu);
+  d_CcNumer      += d_delb.squaredNorm(); // increment CcNumer
+  d_RX.matrixU().solveInPlace(d_delb);
+  
+  d_delu         -= d_RZX * d_delb;
+  d_L.solveInPlace(d_delu, CHOLMOD_Lt);
+  d_L.solveInPlace(d_delu, CHOLMOD_Pt);
+  return d_CcNumer;
+}
+
+merPredD::Scalar merPredD::solveU() {
+  d_delb.setZero(); // in calculation of linPred delb should be zero after solveU
+  d_delu          = d_Utr - d_u0;
+  d_L.solveInPlace(d_delu, CHOLMOD_P);
+  d_L.solveInPlace(d_delu, CHOLMOD_L);    // d_delu now contains cu
+  d_CcNumer       = d_delu.squaredNorm(); // numerator of convergence criterion
+  d_L.solveInPlace(d_delu, CHOLMOD_Lt);
+  d_L.solveInPlace(d_delu, CHOLMOD_Pt);
+  return d_CcNumer;
+}
+
+void merPredD::updateXwts(const ArrayXd& sqrtXwt) {
+  if (d_Xwts.size() != sqrtXwt.size())
+  throw invalid_argument("updateXwts: dimension mismatch");
+  std::copy(sqrtXwt.data(), sqrtXwt.data() + sqrtXwt.size(), d_Xwts.data());
+  if (sqrtXwt.size() == d_V.rows()) { // W is diagonal
+  d_V              = d_Xwts.asDiagonal() * d_X;
+  for (int j = 0; j < d_N; ++j)
+  for (MSpMatrixd::InnerIterator Utj(d_Ut, j), Ztj(d_Zt, j);
+  Utj && Ztj; ++Utj, ++Ztj)
+  Utj.valueRef() = Ztj.value() * d_Xwts.data()[j];
+  } else {
+  SpMatrixd      W(d_V.rows(), sqrtXwt.size());
+  const double *pt = sqrtXwt.data();
+  W.reserve(sqrtXwt.size());
+  for (Index j = 0; j < W.cols(); ++j, ++pt) {
+  W.startVec(j);
+  W.insertBack(j % d_V.rows(), j) = *pt;
+  }
+  W.finalize();
+  d_V              = W * d_X;
+  SpMatrixd      Ut(d_Zt * W.adjoint());
+  if (Ut.cols() != d_Ut.cols())
+  throw std::runtime_error("Size mismatch in updateXwts");
+  
+  // More complex code to handle the pruning of zeros
+  MVec(d_Ut.valuePtr(), d_Ut.nonZeros()).setZero();
+  for (int j = 0; j < d_Ut.outerSize(); ++j) {
+  MSpMatrixd::InnerIterator lhsIt(d_Ut, j);
+  for (SpMatrixd::InnerIterator  rhsIt(Ut, j); rhsIt; ++rhsIt, ++lhsIt) {
+  Index                         k(rhsIt.index());
+  while (lhsIt && lhsIt.index() != k) ++lhsIt;
+  if (lhsIt.index() != k)
+  throw std::runtime_error("Pattern mismatch in updateXwts");
+  lhsIt.valueRef() = rhsIt.value();
+  }
+  }
+  }
+  d_VtV.setZero().selfadjointView<Eigen::Upper>().rankUpdate(d_V.adjoint());
+  updateL();
+}
+
+void merPredD::updateDecomp() {
+  updateDecomp(NULL);
+}
+
+// using a point so as to detect NULL
+void merPredD::updateDecomp(const MatrixXd* xPenalty) {  // update L, RZX and RX
+
+  if (d_LamtUt.cols() != d_V.rows()) {
+    ::Rf_warning("dimension mismatch in updateDecomp()");
+    // Rcpp::Rcout << "WARNING: dimension mismatch in updateDecomp(): " <<
+    // " LamtUt=" << d_LamtUt.rows() << "x" << d_LamtUt.cols() << 
+    // "; V=" << d_V.rows() << "x" << d_V.cols() << " " <<
+    // std::endl;
+  }
+  d_RZX         = d_LamtUt * d_V;
+  if (d_p > 0) {
+    d_L.solveInPlace(d_RZX, CHOLMOD_P);
+    d_L.solveInPlace(d_RZX, CHOLMOD_L);
+    if (debug) Rcpp::Rcout << "updateDecomp 4" << std::endl;
+    MatrixXd      VtVdown(d_VtV);
+    
+    if (xPenalty == NULL)
+    d_RX.compute(VtVdown.selfadjointView<Eigen::Upper>().rankUpdate(d_RZX.adjoint(), -1));
+    else {
+    d_RX.compute(VtVdown.selfadjointView<Eigen::Upper>().rankUpdate(d_RZX.adjoint(), -1).rankUpdate(*xPenalty, 1));
+    }
+    if (d_RX.info() != Eigen::Success)
+    ::Rf_error("Downdated VtV is not positive definite");
+    d_ldRX2         
+      = 2. * d_RX.matrixLLT().diagonal().array().abs().log().sum();
+      if (debug) Rcpp::Rcout << "updateDecomp 6" << std::endl;
+  }
+}
+
+void merPredD::updateRes(const VectorXd& wtres) {
+  if (d_V.rows() != wtres.size())
+  throw invalid_argument("updateRes: dimension mismatch");
+  d_Vtr           = d_V.adjoint() * wtres;
+  d_Utr           = d_LamtUt * wtres;
+}
+
+void merPredD::installPars(const Scalar& f) {
+  d_u0 = u(f);
+  d_beta0 = beta(f);
+  d_delb.setZero();
+  d_delu.setZero();
+}
+
+void merPredD::setBeta0(const VectorXd& nBeta) {
+  if (nBeta.size() != d_p) throw invalid_argument("setBeta0: dimension mismatch");
+  std::copy(nBeta.data(), nBeta.data() + d_p, d_beta0.data());
+}
+
+void merPredD::setDelb(const VectorXd& newDelb) {
+  if (newDelb.size() != d_p)
+  throw invalid_argument("setDelb: dimension mismatch");
+  std::copy(newDelb.data(), newDelb.data() + d_p, d_delb.data());
+}
+
+void merPredD::setDelu(const VectorXd& newDelu) {
+  if (newDelu.size() != d_q)
+  throw invalid_argument("setDelu: dimension mismatch");
+  std::copy(newDelu.data(), newDelu.data() + d_q, d_delu.data());
+}
+
+void merPredD::setU0(const VectorXd& newU0) {
+  if (newU0.size() != d_q) throw invalid_argument("setU0: dimension mismatch");
+  std::copy(newU0.data(), newU0.data() + d_q, d_u0.data());
+}
+```
+

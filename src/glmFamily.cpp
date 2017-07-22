@@ -119,6 +119,7 @@ namespace glm {
     template<typename T>
     struct logitinv : public std::unary_function<T, T> {
 	const T operator() (const T& x) const {
+	  //Rcpp::Rcout << " logitinv " << std::endl;
 	    return T(std::max(std::numeric_limits<T>::epsilon(),
 			      std::min(1.-std::numeric_limits<T>::epsilon(),
 				       Rf_plogis(double(x), 0., 1., 1, 0))));
@@ -391,6 +392,8 @@ namespace glm {
 	  d_linknam(as<std::string>(as<SEXP>(ll["link"]))),
 	  d_dist(   new glmDist(ll)),
 	  d_link(   new glmLink(ll)) {
+      
+      Rcpp::Rcout << "found linknam " << d_linknam << std::endl;
 	if (!ll.inherits("family"))
 	    throw std::runtime_error("glmFamily requires a list of (S3) class \"family\"");
 
@@ -434,12 +437,13 @@ namespace glm {
 
     const ArrayXd glmLink::linkInv(const ArrayXd& eta) const {
       Rcpp::Rcout << " calling C glmLink::linkInv " << std::endl;
-	return as<ArrayXd>(::Rf_eval(::Rf_lang2(as<SEXP>(d_linkInv),
-						as<SEXP>(Rcpp::NumericVector(eta.data(),
-									     eta.data() + eta.size()))
-					 ), d_rho));
-    }
-
+      return as<ArrayXd>(::Rf_eval(::Rf_lang2(as<SEXP>(d_linkInv),
+                as<SEXP>(Rcpp::NumericVector(eta.data(),
+                        eta.data() + eta.size()))
+           ), d_rho));
+      }
+                                                                                                                                   
+                                                                                                                                   
     const ArrayXd glmLink::muEta(const ArrayXd &eta) const {
 	return as<ArrayXd>(::Rf_eval(::Rf_lang2(as<SEXP>(d_muEta),
 						as<SEXP>(Rcpp::NumericVector(eta.data(),

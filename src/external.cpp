@@ -332,6 +332,7 @@ extern "C" {
 
     SEXP glmFamily_linkInv(SEXP ptr, SEXP eta) {
         BEGIN_RCPP;
+        Rcpp::Rcout << " calling glm_Family linkinv " << std::endl;
         return wrap(XPtr<glmFamily>(ptr)->linkInv(as<MVec>(eta)));
         END_RCPP;
     }

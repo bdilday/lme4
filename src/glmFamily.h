@@ -104,6 +104,7 @@ namespace glm {
 	virtual const ArrayXd linkFun(const ArrayXd&) const;
 	virtual const ArrayXd linkInv(const ArrayXd&) const;
 	virtual const ArrayXd   muEta(const ArrayXd&) const;
+	
     };
 
     class cauchitLink : public glmLink {

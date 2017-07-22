@@ -79,7 +79,20 @@ test_binomial_data <- function(nlim=NULL) {
   cc <- which(model_df$ev$outcome == 1)
   model_df$ev[-cc,]$outcome <- 0
   model_df
-  
+}
+
+test_binomial <- function() {
+  df2 <- simulate_data()
+  cc <- which(df2$outcome > 1)
+  df2[cc,]$outcome <- 1
+  bb <- binomial()
+  bb$family <- 'binomialX'
+  bb$link <- 'logit'
+  bb$linkinv <- function(eta) {
+    message('calling the R version of linkinv')
+    binomial()$linkinv(eta)
+  }
+  glmer(outcome ~ (1|fB) + (1|fP), data=df2, family=bb, nAGQ = 0)
 }
 
 #' @export
@@ -182,7 +195,7 @@ multinomial <- function (link = "multiclasslogit") {
   }
 
   # TODO: finish this  
-  linkinv <- function(eta) {
+  linkinv <- function(eta, dim1, dim2) {
     dd <- dim(eta)
     message('multinomial linkinv dim(eta) ', dd, ' ', is.null(dd), ' ', length(eta))
     stopifnot(!is.null(dd))

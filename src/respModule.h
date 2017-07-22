@@ -133,7 +133,8 @@ namespace lme4 {
                    SEXP,SEXP,SEXP);
       
       const MMat&  eta_multi() const {return d_eta_multi;}
-
+      const MMat&   mu_multi() const {return d_mu_multi;}
+      
       double      updateMu(const Eigen::VectorXd&);
       double      updateWrss(); /**< update the weighted residuals and d_wrss */
     

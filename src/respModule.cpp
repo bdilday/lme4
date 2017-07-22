@@ -215,8 +215,9 @@ namespace lme4 {
 
       V = Rcpp::wrap(gamma);
       V.attr("dim") = Rcpp::Dimension(d_y.size(), d_k_class(0));
-     // d_mu  = d_fam.linkInv(V);
+      //d_mu  = d_fam.linkInv(V);
      d_mu  = d_fam.linkInv(gamma);
+    //d_mu  = d_fam.linkInvMulti(gamma, 1, 2);
       if (debug) Rcpp::Rcout << "updateMu: min mu:" << 
         d_mu.minCoeff() << " max mu: " << 
           d_mu.maxCoeff() << std::endl;
