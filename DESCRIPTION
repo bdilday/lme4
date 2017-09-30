@@ -31,7 +31,8 @@ Suggests:
     gamm4,
     pbkrtest,
     HSAUR2,
-    numDeriv
+    numDeriv,
+    rmarkdown
 VignetteBuilder: knitr
 LazyData: yes
 License: GPL (>=2)

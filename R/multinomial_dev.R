@@ -97,9 +97,9 @@ test_binomial <- function() {
 
 #' @export
 glVecFormula <- function(formula, data=NULL, family = gaussian, ...) {
-  y_var <- frm[[2]]
+  y_var <- formula[[2]]
   new_frm_char <- as.character(y_var) 
-  k_class <- max(df1[,as.character(yv)])
+  k_class <- max(data[,as.character(y_var)])
   glf <- glFormula(formula, data, family, ...)
   fixed_ef <- glf$X
   random_effects <- names(glf$reTrms$cnms)
